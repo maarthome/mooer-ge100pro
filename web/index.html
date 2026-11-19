@@ -105,6 +105,7 @@
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
   select.model { min-width: 240px; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   select.model option, .knob.choice select option { background: var(--panel); color: var(--silk); }
+  select.model option:disabled { color: #8a8f8c; }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
   .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
@@ -393,7 +394,7 @@ function modelLabel(type, model, text) {
   const u = model - info.models.length + 1;
   if (info.user_slots && u <= info.user_slots) {
     const name = info.user_list !== undefined && app.userNames[info.user_list] && app.userNames[info.user_list][u];
-    return `${n} | ${name || `User ${u} (empty)`}`;
+    return `${n} | ${name || 'EMPTY'}`;
   }
   // the capture stored in the preset itself: Mooer Studio lists it after the user slots (amp: 93)
   if (model === USER_MODEL && text) return `${String(info.models.length + (info.user_slots || 0) + 1).padStart(2, '0')} | ${text}`;
@@ -955,9 +956,10 @@ function renderEditor() {
     <select class="model" aria-label="Model"></select>`;
   const sel = head.querySelector('select.model');
   for (let m = 0; m < modelCount(s.type); m++) {
-    if (!modelSelectable(s.type, m) && m !== uiModel(s)) continue;   // empty user slots are left out
+    // all user slots are listed, like Mooer Studio, but can't be chosen yet (see modelSelectable)
     const o = document.createElement('option');
     o.value = m; o.textContent = modelLabel(s.type, m);
+    o.disabled = !modelSelectable(s.type, m) && m !== uiModel(s);
     sel.appendChild(o);
   }
   const cur = uiModel(s);
