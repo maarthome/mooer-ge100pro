@@ -48,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
         pass
     except BrokenPipeError:
         pass
+    except (FileNotFoundError, PermissionError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

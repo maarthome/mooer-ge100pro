@@ -37,7 +37,13 @@ class GE100Pro:
         self.path = path or find_hidraw()
         if not self.path:
             raise FileNotFoundError("GE100 Pro (34db:0011) not found; is it plugged into the data port?")
-        self._fd = os.open(self.path, os.O_RDWR)
+        try:
+            self._fd = os.open(self.path, os.O_RDWR)
+        except PermissionError as e:
+            raise PermissionError(
+                f"no access to {self.path}: install udev/70-mooer-ge100pro.rules and make sure "
+                "you are in the plugdev group (see README, Quick start)"
+            ) from e
         self._deframer = Deframer()
 
     def close(self) -> None:

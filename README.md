@@ -16,7 +16,7 @@ Everything known so far, with what is verified and what is a guess: [PROTOCOL.md
 
 ## Quick start (Linux)
 
-Connect the pedal's **data** USB-C port. Allow access without root:
+Connect the pedal's **data** USB-C port. Allow access without root (members of `plugdev`, also over SSH):
 
 ```bash
 sudo cp udev/70-mooer-ge100pro.rules /etc/udev/rules.d/
@@ -24,6 +24,18 @@ sudo cp udev/70-mooer-ge100pro.rules /etc/udev/rules.d/
 
 ```bash
 sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Check that `/dev/hidrawN` now belongs to `plugdev` and that you are a member:
+
+```bash
+ls -l /dev/hidraw* && groups
+```
+
+If `plugdev` is missing from `groups`, add yourself and open a new login session:
+
+```bash
+sudo usermod -aG plugdev "$USER"
 ```
 
 Run the live decoder from the repo folder (no install needed), then use the pedal:

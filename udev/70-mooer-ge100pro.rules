@@ -1,1 +1,11 @@
+# MOOER GE100 Pro / GE100 Pro Li (34db:0011): access to the HID control
+# channel (/dev/hidrawN) without root.
+#
+#   sudo cp udev/70-mooer-ge100pro.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# GROUP/MODE: members of plugdev get access, including over SSH.
+# uaccess:    the user at the local screen/keyboard also gets access (this
+#             one does NOT apply to SSH sessions). The file number must stay
+#             below 73 for the uaccess tag to take effect.
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="34db", ATTRS{idProduct}=="0011", MODE="0660", GROUP="plugdev", TAG+="uaccess"
