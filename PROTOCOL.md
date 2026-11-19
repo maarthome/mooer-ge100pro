@@ -286,3 +286,14 @@ python3 -m ge100pro captures/OUT.pcapng
 | [klaushofrichter/ge150pro-editor](https://github.com/klaushofrichter/ge150pro-editor) | GE150 Pro, `0483:5703` | same framing, different command set |
 | [atahan26/ge200-editor](https://github.com/atahan26/ge200-editor) | GE200, `0483:5703` | same framing, different command set |
 | [ThijsWithaar/MooerManager](https://github.com/ThijsWithaar/MooerManager) | GE200 | earliest public decoding (Wireshark dissector) |
+
+## Loading and deleting user captures (capture 07, Mooer Studio, amp list)
+
+| Message | Payload | Meaning |
+|---|---|---|
+| `61` host → `62` | `list, slot u16, total u8, index u8, length u16 LE, bytes` | upload in `total` parts: part 0 holds the capture name (`11 00` = 17 bytes, "Mesa_Cln_l0yr7jfz"), parts 1–20 hold 512 bytes each (`00 02`), 10 240 bytes of little-endian float32 values (the network weights, zero padded). Each part is answered by `62 [list, slot u16, index]`. [V] |
+| `69` pedal | one 29-byte list entry (as in `66`) | pushed when an entry changes: after the last upload part (slot now used, name) and after a delete (all zero). [V] |
+| `67` host → `68` | `list, slot u16, 01, name` (no length, no padding) → `list, slot u16, 01` | delete the capture in that user slot, e.g. `02 03 00 01 "Mesa_Studio22_Cln_"`. [V] |
+
+Mooer Studio asks `65` for the list again after both. The 10 240 bytes are not the .nam file itself: Mooer Studio
+converts it first (how is not known yet). List 2 (amps) only so far; drives (3) and cabs (1) assumed the same.

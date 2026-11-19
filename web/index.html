@@ -113,6 +113,8 @@
   .mrow:hover, .mrow:focus-within { background: color-mix(in srgb, var(--led) 18%, transparent); }
   .mrow.cur { background: color-mix(in srgb, var(--led) 30%, transparent); }
   .mrow.off .mname { color: #8a8f8c; cursor: not-allowed; }
+  .mrow .pm.live { color: var(--silk); cursor: pointer; }
+  .mrow .pm.live:hover { border-color: #e5534b; color: #e5534b; }
   .mrow .pm { width: 28px; height: 28px; margin: 0 4px; background: none; border: 1px solid var(--edge); border-radius: 4px; color: #8a8f8c; font: inherit; cursor: not-allowed; }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
@@ -512,7 +514,7 @@ function handle(f) {
       clearTimeout(app.followTimer);
       app.followTimer = setTimeout(() => { app.loading = true; send(P.CMD.CURRENT_PRESET); }, 500);
     }
-  } else if (f.cmd === R.LIST) {
+  } else if (f.cmd === R.LIST || f.cmd === R.USER_ENTRY) {   // 0x69: one list entry changed (load / delete)
     for (const e of P.parseList(p)) {
       (app.userNames[e.type] = app.userNames[e.type] || {})[e.index] = e.used ? e.name : '';
     }
@@ -843,6 +845,23 @@ async function syncAfterEdit() {
   }
 }
 
+/** Delete a user capture from the pedal: 0x67 [list, slot u16, 1, name] -> 0x68 [list, slot u16, 1],
+ *  then the pedal pushes the emptied entry as 0x69 (Mooer Studio, capture 07). */
+async function deleteCapture(list, u, name) {
+  if (!app.dev || app.busy) return;
+  if (!window.confirm(`Delete the capture "${name}" (user slot ${u}) from the pedal?\n\nThis can't be undone; you can load the file again with Mooer Studio.`)) return;
+  app.busy = true;
+  try {
+    const bytes = Array.from(name.slice(0, 24), (c) => c.charCodeAt(0) & 0x7f);
+    const ack = (await request(P.CMD.USER_DELETE, [list, u & 0xff, u >> 8, 1, ...bytes], P.REPLY.USER_DELETE, 3000)).payload;
+    if (ack[3] !== 1) throw new Error('the pedal did not delete the capture');
+    await request(P.CMD.LIST, [list, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
+    toast(`Deleted "${name}"`);
+  } catch (e) { fail(e); }
+  app.busy = false;
+  renderPreset();
+}
+
 /** Ask which block to put in an empty slot. */
 function pickBlock(index) {
   if (!app.preset || !app.dev || app.busy) return;
@@ -985,7 +1004,8 @@ function knobParse(k, text) {
 /** The model list: click the button, then point and click a model. User capture / IR rows carry + (load a
  *  capture into an empty slot) and − (delete it), like Mooer Studio; those and choosing a user slot wait for a
  *  Mooer Studio capture of the commands, because guessing them locked the pedal up. */
-const PM_HINT = 'Loading and deleting captures is not possible yet: the command is still unknown (needs a Mooer Studio capture)';
+const PM_HINT = 'Deleting drive captures and cab IRs is not possible yet: only seen for amp captures';
+const PM_ADD_HINT = 'Loading a capture is not possible yet: Mooer Studio converts the .nam file first, and that conversion is still unknown';
 const USER_HINT = 'Empty, or (drive / cab) not used on the pedal yet: choose it once on the pedal itself';
 function buildModelPicker(box, s) {
   const btn = box.querySelector('button.model'), list = box.querySelector('.mlist');
@@ -1015,9 +1035,17 @@ function buildModelPicker(box, s) {
       pm.className = 'pm';
       pm.textContent = empty ? '+' : '−';
       pm.setAttribute('aria-label', (empty ? 'Load a capture into ' : 'Delete the capture in ') + label.split(' | ')[0]);
-      pm.title = PM_HINT;
-      pm.setAttribute('aria-disabled', 'true');
-      pm.addEventListener('click', (e) => { e.stopPropagation(); toast(PM_HINT, true); });
+      const u = m - info.models.length + 1;
+      const canDelete = !empty && info.user_list === 2;   // seen for amp captures only (capture 07)
+      if (canDelete) {
+        pm.title = `Delete this capture from the pedal (user slot ${u})`;
+        pm.classList.add('live');
+        pm.addEventListener('click', (e) => { e.stopPropagation(); close(); deleteCapture(info.user_list, u, label.split(' | ').slice(1).join(' | ')); });
+      } else {
+        pm.title = empty ? PM_ADD_HINT : PM_HINT;
+        pm.setAttribute('aria-disabled', 'true');
+        pm.addEventListener('click', (e) => { e.stopPropagation(); toast(pm.title, true); });
+      }
       row.appendChild(pm);
     }
     list.appendChild(row);
