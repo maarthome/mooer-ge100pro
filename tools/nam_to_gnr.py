@@ -189,14 +189,19 @@ def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]], default: str | N
     frm.grid(sticky="nsew")
     root.columnconfigure(0, weight=1); root.rowconfigure(0, weight=1)
     frm.columnconfigure(0, weight=1); frm.rowconfigure(2, weight=1)
-    status = ttk.Label(frm, text=f"0 of {len(jobs)}")
+    frm.rowconfigure(2, weight=0); frm.rowconfigure(4, weight=1)
+    status = ttk.Label(frm, text="Current file")
     status.grid(column=0, row=0, sticky="w")
-    bar = ttk.Progressbar(frm, length=520, maximum=100 * len(jobs), mode="determinate")
-    bar.grid(column=0, row=1, sticky="ew", pady=8)
+    bar = ttk.Progressbar(frm, length=520, maximum=100, mode="determinate")        # this .nam file
+    bar.grid(column=0, row=1, sticky="ew", pady=(4, 10))
+    total = ttk.Label(frm, text=f"All files: 0 of {len(jobs)}")
+    total.grid(column=0, row=2, sticky="w")
+    tbar = ttk.Progressbar(frm, length=520, maximum=100 * len(jobs), mode="determinate")   # the whole batch
+    tbar.grid(column=0, row=3, sticky="ew", pady=(4, 10))
     log = Text(frm, width=100, height=16, wrap="none")
-    log.grid(column=0, row=2, sticky="nsew")
+    log.grid(column=0, row=4, sticky="nsew")
     close = ttk.Button(frm, text="Close", command=root.destroy, state="disabled")
-    close.grid(column=0, row=3, sticky="e", pady=(8, 0))
+    close.grid(column=0, row=5, sticky="e", pady=(8, 0))
     result = {"failed": 0}
 
     def ui(fn):                       # run fn in the Tk thread
@@ -230,16 +235,18 @@ def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]], default: str | N
 
     def work():
         for i, (src, dst) in enumerate(jobs, 1):
-            ui(lambda i=i, src=src: status.config(text=f"{i} of {len(jobs)}: {src.name}"))
+            ui(lambda i=i, src=src: (bar.config(value=0), status.config(text=f"{src.name}  0%"),
+                                     total.config(text=f"All files: {i} of {len(jobs)}")))
             base = 100 * (i - 1)
             def show(pct, i=i, src=src, base=base):
-                ui(lambda: (bar.config(value=base + pct), status.config(text=f"{i} of {len(jobs)}: {src.name}  {pct:.0f}%")))
+                ui(lambda: (bar.config(value=pct), status.config(text=f"{src.name}  {pct:.0f}%"),
+                            tbar.config(value=base + pct), total.config(text=f"All files: {i} of {len(jobs)}  {(base + pct) / len(jobs):.0f}%")))
             res, msg = convert_job(cli, src, dst, asker, show)
             result["failed"] += res == "FAIL"
             line = f"{res:<4} {src}  ->  {dst}  ({msg})\n"
             print(line, end="")
-            ui(lambda i=i, line=line: (bar.config(value=100 * i), log.insert(END, line), log.see(END)))
-        ui(lambda: (status.config(text=f"Done: {len(jobs)} files, {result['failed']} failed"), close.config(state="normal")))
+            ui(lambda i=i, line=line: (bar.config(value=100), tbar.config(value=100 * i), log.insert(END, line), log.see(END)))
+        ui(lambda: (total.config(text=f"All files: done, {len(jobs)} files, {result['failed']} failed"), close.config(state="normal")))
 
     threading.Thread(target=work, daemon=True).start()
     root.mainloop()
@@ -272,13 +279,13 @@ def main(argv: list[str] | None = None) -> int:
         asker = Asker(default)
         for i, (src, dst) in enumerate(jobs, 1):
             def show(pct, i=i, src=src):
-                filled = round(30 * ((i - 1) + pct / 100) / len(jobs))
-                print(f"\r[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {src.name} {pct:3.0f}%", end="", flush=True)
+                f1, f2 = round(20 * pct / 100), round(20 * ((i - 1) + pct / 100) / len(jobs))
+                print(f"\rfile [{'#' * f1}{'.' * (20 - f1)}] {pct:3.0f}%   all [{'#' * f2}{'.' * (20 - f2)}] {i}/{len(jobs)}  {src.name}",
+                      end="", flush=True)
             res, msg = convert_job(cli, src, dst, asker, show)
-            print("\r", end="")
+            print("\r" + " " * 110 + "\r", end="")
             failed += res == "FAIL"
-            filled = round(30 * i / len(jobs))
-            print(f"[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {res:<4} {src}  ->  {dst.name}  ({msg})")
+            print(f"{i}/{len(jobs)} {res:<4} {src}  ->  {dst.name}  ({msg})")
         print(f"\n{len(jobs)} files, {failed} failed.")
     return 1 if failed else 0
 
