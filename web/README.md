@@ -9,6 +9,8 @@ What it does:
 - select a preset; see its 10-slot signal chain
 - switch a block on/off with the light on its card, or in the editor
 - move a block: drag its card to another place in the chain
+- add a block: click **+** on an empty slot, pick the group and the model
+- remove a block: drag its card onto the bin above the chain, on the right
 - per slot: pick the model from a drop-down, turn the knobs (drag up/down, mouse wheel, arrow keys,
   double-click or Enter to type a value; hold Shift for fine steps); delay sub-divisions are drop-downs
 - Settings (saved in this browser): five text sizes (parameter names in the editor, block names and group names in

@@ -81,7 +81,15 @@
   .slot .ledbtn { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid transparent; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; z-index: 1; }
   .slot .ledbtn:hover { border-color: var(--dim); background: rgba(0,0,0,.15); }
   .slot.sel { border-color: var(--led); box-shadow: 0 0 0 1px var(--led); }
-  .slot.vacant .main { cursor: default; }
+  .slot.vacant .main { cursor: pointer; }
+  .slot .addbtn { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--dim); background: none; color: var(--text); font-size: 20px; line-height: 1; display: grid; place-items: center; cursor: pointer; padding: 0; z-index: 1; }
+  .slot .addbtn:hover, .slot .addbtn:focus-visible { border-style: solid; border-color: var(--led); color: var(--led); outline: none; }
+  .chainbar { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+  .bin { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px dashed var(--edge); border-radius: var(--r); color: var(--dim); opacity: .55; transition: opacity .15s, border-color .15s, color .15s, background .15s; }
+  .bin svg { width: 22px; height: 22px; fill: currentColor; }
+  .bin.armed { opacity: 1; border-color: var(--dim); }
+  .bin.over { opacity: 1; border-style: solid; border-color: #e5534b; color: #e5534b; background: color-mix(in srgb, #e5534b 14%, transparent); }
+  #addDlg select { width: 100%; min-width: 320px; height: 34px; margin-bottom: 10px; }
   .slot.vacant { background: var(--chassis); border-style: dashed; border-top-width: 1px; color: var(--led-off); }
   .slot .pos { margin-right: 22px; font-size: var(--fs-group, 12px); line-height: 1.3; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: var(--fs-block, 15px); line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: break-word; }
@@ -182,6 +190,12 @@
         <div class="pnum" id="pnum">–</div>
         <div><div class="pname" id="pname"></div><div class="pstate" id="pstate"></div></div>
       </div>
+      <div class="chainbar">
+        <div class="bin" id="bin" title="Drag a block here to remove it from the chain" aria-label="Remove block: drag a block here">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h1.5v-8H10zm3.5 0v8H15v-8h-1.5z"/></svg>
+          <span>Drop here to remove</span>
+        </div>
+      </div>
       <div class="chain" id="chain" role="list" aria-label="Signal chain"></div>
       <div class="editor" id="editor"></div>
     </section>
@@ -257,6 +271,20 @@
     </ul>
     <p class="note">MOOER, GE100 Pro and MOOER Studio are names of MOOER Audio. This editor is not made, endorsed or supported by MOOER Audio. Full details: CREDITS.md and NOTICE.md in the project.</p>
     <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="addDlg">
+  <form method="dialog">
+    <h3 id="addTitle">Add a block</h3>
+    <label for="addType">Group</label>
+    <select id="addType"></select>
+    <label for="addModel">Model</label>
+    <select id="addModel"></select>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" value="add" id="addConfirm">Add</button>
+    </div>
   </form>
 </dialog>
 
@@ -341,6 +369,7 @@ const app = {
   followTimer: null,
   dirty: false,
   busy: false,
+  deafUntil: 0,       // no sends before this time (the pedal is busy after a chain edit)
   showAll: false,
   toSend: new Set(),       // slots with edits still to send
   quietUntil: new Map(),   // slot -> time until which 0x27 echoes of our own edits are ignored
@@ -362,9 +391,21 @@ function send(cmd, payload = []) {
   log('host', { cmd, payload: Uint8Array.from(payload) });
   const reports = P.buildReports(cmd, payload);
   app.sendChain = app.sendChain.then(async () => {
+    const wait = app.deafUntil - Date.now();   // after a chain edit the pedal ignores requests for a moment
+    if (wait > 0) await sleep(wait);
     for (const r of reports) await app.dev.sendReport(0, r);
   }).catch((e) => fail(e));
   return app.sendChain;
+}
+
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+/** Wait for the first of several replies; resolves with the frame, or with null after ms. */
+function waitAny(cmds, ms) {
+  return new Promise((resolve) => {
+    const w = { cmds, resolve, timer: setTimeout(() => { app.waiters.splice(app.waiters.indexOf(w), 1); resolve(null); }, ms) };
+    app.waiters.push(w);
+  });
 }
 
 function waitFor(cmd, ms = 1500) {
@@ -385,7 +426,7 @@ function onReport(ev) {
   for (const f of app.deframer.feed(r)) {
     log('pedal', f);
     if (!f.crcOk) continue;
-    const i = app.waiters.findIndex((w) => w.cmd === f.cmd);
+    const i = app.waiters.findIndex((w) => (w.cmds ? w.cmds.includes(f.cmd) : w.cmd === f.cmd));
     if (i >= 0) { const [w] = app.waiters.splice(i, 1); clearTimeout(w.timer); w.resolve(f); }
     handle(f);
   }
@@ -619,12 +660,12 @@ function renderChain() {
     card.dataset.index = s.index;
     if (s.used) card.style.setProperty('--g', groupColour(s.type));
     const label = s.used ? modelLabel(s.type, s.model) : '';
-    card.innerHTML = `<button class="main"><span class="pos"></span><span class="snum"></span><span class="smodel"></span></button>${s.used ? `<button class="ledbtn"><span class="led${s.enabled ? ' on' : ''}"></span></button>` : ''}<span class="cursor" aria-hidden="true"></span>`;
+    card.innerHTML = `<button class="main"><span class="pos"></span><span class="snum"></span><span class="smodel"></span></button>${s.used ? `<button class="ledbtn"><span class="led${s.enabled ? ' on' : ''}"></span></button>` : '<button class="addbtn" type="button">+</button>'}<span class="cursor" aria-hidden="true"></span>`;
     const main = card.querySelector('.main');
     card.querySelector('.pos').textContent = `${s.index + 1}  ${s.used ? typeName(s.type) : ''}`;
     card.querySelector('.snum').textContent = s.used ? label.split(' | ')[0] : '';
     card.querySelector('.smodel').textContent = s.used ? label.split(' | ').slice(1).join(' | ') : 'Empty';
-    main.title = s.used ? `${typeName(s.type)}: ${label}${s.enabled ? '' : ' (off)'}. Drag to move it in the chain.` : 'Empty: drop a block here';
+    main.title = s.used ? `${typeName(s.type)}: ${label}${s.enabled ? '' : ' (off)'}. Drag to move it, or onto the bin to remove it.` : 'Empty: click + to add a block, or drop a block here';
     main.setAttribute('aria-label', s.used ? `Slot ${s.index + 1}: ${typeName(s.type)}, ${label}, ${s.enabled ? 'on' : 'off'}` : `Slot ${s.index + 1}: empty`);
     if (s.used) {
       main.addEventListener('click', () => { app.sel = s.index; renderChain(); renderEditor(); openPage(s); });
@@ -637,12 +678,18 @@ function renderChain() {
       card.addEventListener('dragstart', (e) => {
         app.dragFrom = s.index;
         card.classList.add('dragging');
+        $('bin').classList.add('armed');
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(s.index));
       });
-      card.addEventListener('dragend', () => { app.dragFrom = null; renderChain(); });
+      card.addEventListener('dragend', () => { app.dragFrom = null; $('bin').classList.remove('armed', 'over'); renderChain(); });
     } else {
       main.tabIndex = -1;
+      const add = card.querySelector('.addbtn');
+      add.title = `Add a block in slot ${s.index + 1}`;
+      add.setAttribute('aria-label', `Add a block in slot ${s.index + 1}`);
+      add.addEventListener('click', (e) => { e.stopPropagation(); pickBlock(s.index); });
+      main.addEventListener('click', () => pickBlock(s.index));
     }
     card.addEventListener('dragover', (e) => {
       if (app.dragFrom === null || app.dragFrom === undefined || app.dragFrom === s.index) return;
@@ -681,13 +728,113 @@ async function moveSlot(from, to) {
   app.sel = to;
   app.dirty = true;
   renderPreset();
-  chainFrame = (chainFrame + 1) % 256;
   try {
-    const ack = await request(P.CMD.CHAIN, [chainFrame, 4, from, to], P.REPLY.CHAIN, 1500);
-    if (ack.payload.length >= 2 && ack.payload[1] !== 1) throw new Error('the pedal did not accept the move');
+    await chainEdit(4, [from, to], 'move');
   } catch (e) {
     fail(e);
     await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP).catch(() => {});   // show what the pedal really has
+  }
+}
+
+/** Send a chain edit (0x2d) and wait for its 0x2e. Afterwards the pedal is deaf for ~200 ms
+ *  (Prime M2, lucanenni/mooer-prime-m2-web), so nothing is sent for 300 ms. */
+async function chainEdit(op, args, what) {
+  chainFrame = (chainFrame + 1) % 256;
+  const ack = await request(P.CMD.CHAIN, [chainFrame, op, ...args], P.REPLY.CHAIN, 1500);
+  app.deafUntil = Date.now() + 300;
+  if (ack.payload.length >= 2 && ack.payload[1] !== 1) throw new Error(`the pedal did not accept the ${what}`);
+}
+
+/** After an add or remove: take what the pedal sends by itself (0x27 or 0x32), else ask for the preset. */
+async function syncAfterEdit() {
+  const pushed = await waitAny([P.REPLY.SLOT, P.REPLY.PRESET_DUMP], 500);
+  if (!pushed) {
+    await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP).catch(() => {});
+  }
+}
+
+/** Ask which block to put in an empty slot. */
+function pickBlock(index) {
+  if (!app.preset || !app.dev || app.busy) return;
+  const dlg = $('addDlg'), tSel = $('addType'), mSel = $('addModel');
+  $('addTitle').textContent = `Add a block in slot ${index + 1}`;
+  const used = new Set(app.preset.slots.filter((x) => x.used).map((x) => x.type));
+  const types = Object.keys(M.types).map(Number).sort((a, b) => a - b);
+  tSel.textContent = '';
+  for (const t of types) {
+    const o = document.createElement('option');
+    o.value = t;
+    o.textContent = typeName(t) + (used.has(t) ? ' (already in the chain)' : '');
+    o.style.background = groupColour(t) === 'transparent' ? '' : groupColour(t);
+    tSel.appendChild(o);
+  }
+  tSel.value = String(types.find((t) => !used.has(t)) ?? types[0]);
+  const fillModels = () => {
+    const t = Number(tSel.value);
+    mSel.textContent = '';
+    for (let m = 0; m < modelCount(t); m++) {
+      const o = document.createElement('option');
+      o.value = m; o.textContent = modelLabel(t, m);
+      mSel.appendChild(o);
+    }
+    mSel.value = '0';
+  };
+  tSel.onchange = fillModels;
+  fillModels();
+  dlg.onclose = () => { if (dlg.returnValue === 'add') addSlot(index, Number(tSel.value), Number(mSel.value)); };
+  dlg.returnValue = '';
+  dlg.showModal();
+  tSel.focus();
+}
+
+/** Put a block in an empty slot: 0x2d operation 1 (slot, type, model). */
+async function addSlot(index, type, model) {
+  if (!app.preset || !app.dev || app.busy) return;
+  const s = app.preset.slots[index];
+  if (s.used) return;
+  // show it straight away; the pedal's answer below fills in the real values
+  s.used = true; s.type = type; s.model = model; s.enabled = true;
+  s.raw = new Uint8Array(50);
+  const put = (o, v) => { s.raw[o] = v & 0xff; s.raw[o + 1] = v >> 8; };
+  put(0, 1); put(2, type); put(4, 1); put(6, model);
+  s.params = new Array(s.params.length).fill(0);
+  s.text = '';
+  app.quietUntil.delete(index);
+  app.sel = index;
+  app.dirty = true;
+  app.busy = true;
+  renderPreset();
+  try {
+    await chainEdit(1, [index, type, model], 'new block');
+    await syncAfterEdit();
+  } catch (e) {
+    fail(e);
+    await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP).catch(() => {});
+  } finally {
+    app.busy = false;
+    renderPreset();
+  }
+}
+
+/** Remove a block from the chain: 0x2d operation 3 (slot). */
+async function deleteSlot(index) {
+  if (!app.preset || !app.dev || app.busy) return;
+  const s = app.preset.slots[index];
+  if (!s.used) return;
+  Object.assign(s, { used: false, type: 0, model: 0, enabled: false, params: new Array(s.params.length).fill(0), text: '', raw: new Uint8Array(50) });
+  if (app.sel === index) app.sel = (app.preset.slots.find((x) => x.used) || {}).index ?? null;
+  app.dirty = true;
+  app.busy = true;
+  renderPreset();
+  try {
+    await chainEdit(3, [index], 'removal');
+    await syncAfterEdit();
+  } catch (e) {
+    fail(e);
+    await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP).catch(() => {});
+  } finally {
+    app.busy = false;
+    renderPreset();
   }
 }
 
@@ -923,6 +1070,20 @@ $('settingsBtn').addEventListener('click', openSettings);
 $('creditsBtn').addEventListener('click', () => $('creditsDlg').showModal());
 $('connectBtn').addEventListener('click', connect);
 $('saveBtn').addEventListener('click', save);
+$('bin').addEventListener('dragover', (e) => {
+  if (app.dragFrom === null || app.dragFrom === undefined) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  $('bin').classList.add('over');
+});
+$('bin').addEventListener('dragleave', () => $('bin').classList.remove('over'));
+$('bin').addEventListener('drop', (e) => {
+  e.preventDefault();
+  const from = app.dragFrom;
+  app.dragFrom = null;
+  $('bin').classList.remove('armed', 'over');
+  if (from !== null && from !== undefined) deleteSlot(from);
+});
 $('search').addEventListener('input', renderList);
 $('logBtn').addEventListener('click', () => {
   const open = $('log').classList.toggle('open');
