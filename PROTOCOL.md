@@ -297,3 +297,6 @@ python3 -m ge100pro captures/OUT.pcapng
 
 Mooer Studio asks `65` for the list again after both. The 10 240 bytes are not the .nam file itself: Mooer Studio
 converts it first (how is not known yet). List 2 (amps) only so far; drives (3) and cabs (1) assumed the same.
+
+Capture names are at most 18 characters. Mooer Studio names a loaded capture `<file name>_<8 random characters>` and cuts
+that to 18: "Mesa_Cln" → "Mesa_Cln_l0yr7jfz", "Mesa_Studio22_Clean" → "Mesa_Studio22_Clea" (suffix cut off entirely).
