@@ -44,8 +44,15 @@ def out_name(src: Path, when: dt.datetime) -> str:
     return f"{stem[:NAME_LEN].ljust(NAME_LEN, PAD)}_{when:%Y-%m-%d_%H%M}.gnr"
 
 
+def here() -> Path:
+    """Folder of this script, or of NAM_to_GNR.exe when built with PyInstaller."""
+    return Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+
+
 def find_cli(given: str | None) -> Path:
-    for p in [given, os.environ.get("NAM_TO_GNR_CLI"), DEFAULT_CLI]:
+    remembered = here() / "nam_to_gnr_cli_path.txt"   # written after the converter was picked once
+    saved = remembered.read_text(encoding="utf-8").strip() if remembered.is_file() else None
+    for p in [given, os.environ.get("NAM_TO_GNR_CLI"), saved, here() / "nam_to_gnr_cli.exe", DEFAULT_CLI]:
         if p and Path(p).is_file():
             return Path(p)
     try:                                    # ask for it
@@ -55,6 +62,10 @@ def find_cli(given: str | None) -> Path:
                                        filetypes=[("nam_to_gnr_cli", "nam_to_gnr_cli*"), ("All files", "*")])
         root.destroy()
         if p:
+            try:
+                remembered.write_text(p, encoding="utf-8")
+            except OSError:
+                pass
             return Path(p)
     except Exception:
         pass
@@ -254,6 +265,8 @@ def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]], default: str | N
 
 
 def main(argv: list[str] | None = None) -> int:
+    if sys.stdout is None:            # NAM_to_GNR.exe has no console window: printing goes nowhere
+        sys.stdout = sys.stderr = open(os.devnull, "w")
     ap = argparse.ArgumentParser(description="Convert .nam files to .gnr with Mooer's nam_to_gnr_cli.exe")
     ap.add_argument("source", nargs="?", help=".nam file or folder (asked in a window when left out)")
     ap.add_argument("--cli", help="path to nam_to_gnr_cli.exe")

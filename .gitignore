@@ -11,3 +11,8 @@ captures/raw/
 
 # your editor settings (Settings > Save to file)
 web/settings.js
+
+# PyInstaller output (tools/build_exe.ps1)
+tools/dist/
+tools/build/
+*.spec
