@@ -84,9 +84,9 @@
   .slot.vacant .main { cursor: pointer; }
   .slot .addbtn { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--dim); background: none; color: var(--text); font-size: 20px; line-height: 1; display: grid; place-items: center; cursor: pointer; padding: 0; z-index: 1; }
   .slot .addbtn:hover, .slot .addbtn:focus-visible { border-style: solid; border-color: var(--led); color: var(--led); outline: none; }
-  .chainbar { display: flex; justify-content: flex-end; margin: 0 0 8px; }
-  .bin { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px dashed var(--edge); border-radius: var(--r); color: var(--dim); opacity: .55; transition: opacity .15s, border-color .15s, color .15s, background .15s; }
-  .bin svg { width: 22px; height: 22px; fill: currentColor; }
+  .screen .spacer { flex: 1; }
+  .bin { align-self: center; display: flex; align-items: center; gap: 16px; padding: 12px 24px; font-size: 1.6rem; border: 1px dashed var(--edge); border-radius: var(--r); color: var(--dim); opacity: .55; transition: opacity .15s, border-color .15s, color .15s, background .15s; }
+  .bin svg { width: 44px; height: 44px; fill: currentColor; }
   .bin.armed { opacity: 1; border-color: var(--dim); }
   .bin.over { opacity: 1; border-style: solid; border-color: #e5534b; color: #e5534b; background: color-mix(in srgb, #e5534b 14%, transparent); }
   #addDlg select { width: 100%; min-width: 320px; height: 34px; margin-bottom: 10px; }
@@ -105,6 +105,7 @@
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
   select.model { min-width: 240px; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   select.model option, .knob.choice select option { background: var(--panel); color: var(--silk); }
+  select.model option:disabled, #addModel option:disabled { color: var(--led-off); }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
   .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
@@ -189,8 +190,7 @@
       <div class="screen">
         <div class="pnum" id="pnum">–</div>
         <div><div class="pname" id="pname"></div><div class="pstate" id="pstate"></div></div>
-      </div>
-      <div class="chainbar">
+        <span class="spacer"></span>
         <div class="bin" id="bin" title="Drag a block here to remove it from the chain" aria-label="Remove block: drag a block here">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h1.5v-8H10zm3.5 0v8H15v-8h-1.5z"/></svg>
           <span>Drop here to remove</span>
@@ -343,6 +343,15 @@ const typeInfo = (t) => M.types[String(t)] || { name: `Type ${t}`, models: [] };
 const typeName = (t) => typeInfo(t).name;
 /** Number of selectable models of a type: factory models + user capture/IR slots. */
 const modelCount = (t) => typeInfo(t).models.length + (typeInfo(t).user_slots || 0);
+/** False for a user capture / IR slot that holds nothing (or whose name the pedal has not sent yet):
+ *  choosing one makes the pedal show a garbage name and drop off USB. */
+function modelSelectable(type, model) {
+  const info = typeInfo(type);
+  if (model < info.models.length) return true;
+  const u = model - info.models.length + 1;
+  const names = info.user_list !== undefined && app.userNames[info.user_list];
+  return Boolean(info.user_slots && u <= info.user_slots && names && names[u]);
+}
 /** Model as the pedal shows it, e.g. "01 | 65 US DX"; user slots show the capture name read from the pedal. */
 function modelLabel(type, model) {
   const info = typeInfo(type), n = String(model + 1).padStart(2, '0');
@@ -775,6 +784,7 @@ function pickBlock(index) {
     for (let m = 0; m < modelCount(t); m++) {
       const o = document.createElement('option');
       o.value = m; o.textContent = modelLabel(t, m);
+      o.disabled = !modelSelectable(t, m);
       mSel.appendChild(o);
     }
     mSel.value = '0';
@@ -791,7 +801,7 @@ function pickBlock(index) {
 async function addSlot(index, type, model) {
   if (!app.preset || !app.dev || app.busy) return;
   const s = app.preset.slots[index];
-  if (s.used) return;
+  if (s.used || !modelSelectable(type, model)) return;
   // show it straight away; the pedal's answer below fills in the real values
   s.used = true; s.type = type; s.model = model; s.enabled = true;
   s.raw = new Uint8Array(50);
@@ -905,6 +915,7 @@ function renderEditor() {
   for (let m = 0; m < modelCount(s.type); m++) {
     const o = document.createElement('option');
     o.value = m; o.textContent = modelLabel(s.type, m);
+    o.disabled = !modelSelectable(s.type, m) && m !== s.model;
     sel.appendChild(o);
   }
   sel.value = String(s.model);
@@ -935,7 +946,7 @@ function renderEditor() {
 }
 
 function setModel(s, m) {
-  if (m < 0 || m >= modelCount(s.type) || m === s.model) return;
+  if (m < 0 || m >= modelCount(s.type) || m === s.model || !modelSelectable(s.type, m)) return;
   s.model = m;
   pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
   renderChain(); renderEditor();
