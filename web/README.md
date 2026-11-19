@@ -60,3 +60,19 @@ is written there by itself (after a browser restart the editor asks once more, w
 editor reads `settings.js` if it is there, so the settings move with the folder. `settings.js` is not in git, so
 `git pull` never overwrites it. In Brave the save window may be switched off (`brave://flags/#file-system-access-api`):
 then the button downloads `settings.js`; move it into the `web` folder yourself.
+
+## As a program (no browser setup, no WebHID)
+
+`GE100Pro_Editor.exe` is the same editor as one Windows program. It talks to the pedal over USB itself
+(`src/ge100pro/app.py`, a small web server on 127.0.0.1 only) and shows the editor in an Edge, Chrome or Brave
+window without address bar. Settings are saved by themselves in `settings.js` next to the .exe. It stops a few
+seconds after you close the window. Build it once on Windows (needs Python and internet for PyInstaller):
+
+    powershell -ExecutionPolicy Bypass -File tools\build_editor_exe.ps1
+
+The result is `tools\dist\GE100Pro_Editor.exe`; copy it anywhere. Without building, the same runs from the repo,
+also on the Raspberry Pi (it opens Chromium):
+
+    PYTHONPATH=src python3 -m ge100pro.app
+
+Close Mooer Studio first: only one program can talk to the pedal at a time.

@@ -339,6 +339,7 @@
   </form>
 </dialog>
 
+<script src="bridge.js"></script>
 <script src="protocol.js"></script>
 <script src="models.js"></script>
 <!-- your settings, written by Settings > Save to file (not in git); a missing file is fine -->
@@ -387,6 +388,13 @@ const fileHandleStore = {
 };
 async function writeSettingsFile(ask) {
   const note = (t) => { const n = $('setFileNote'); if (n) n.textContent = t; };
+  if (window.GE100PRO_APP) {                          // the desktop app writes settings.js next to itself
+    try {
+      const r = await (await fetch('/bridge/settings', { method: 'POST', body: settingsText() })).json();
+      note(r.ok ? `Saved to ${r.file}` : 'Could not write settings.js: ' + r.error);
+    } catch (e) { note('Could not write settings.js: ' + e.message); }
+    return;
+  }
   if (!('showSaveFilePicker' in window)) {           // e.g. Brave with the file system flag off: download it instead
     if (!ask) return;
     const a = document.createElement('a');
@@ -1479,6 +1487,7 @@ function openSettings() {
   const gbox = $('setGroups'); gbox.textContent = '';
   for (const t of Object.keys(M.types)) mk(gbox, typeName(t), settings.groups[t], (v) => { settings.groups[t] = v; renderChain(); renderEditor(); });
   $('setFile').onclick = () => writeSettingsFile(true);
+  $('setFile').hidden = Boolean(window.GE100PRO_APP);   // the app saves every change by itself
   $('setFileNote').textContent = window.GE100PRO_SETTINGS ? 'Settings were read from settings.js next to index.html.' : '';
   $('setReset').onclick = () => { settings = structuredClone(DEFAULT_SETTINGS); applySettings(); saveSettings(); renderChain(); renderEditor(); openSettings(); };
   if (!dlg.open) dlg.showModal();
