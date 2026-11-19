@@ -15,7 +15,7 @@ Folders: choosing the folder  D:\\NAM  with subfolders writes to  D:\\NAM_GNR  w
 every folder name with _GNR added:  D:\\NAM\\Fender\\Twin.nam  ->  D:\\NAM_GNR\\Fender_GNR\\Twin....gnr
 
 Usage (Windows, Python 3.9+):
-    python nam_to_gnr.py                      asks: one file or a folder, then picks it in a window
+    python nam_to_gnr.py                      window: Single or Directory, then a progress bar
     python nam_to_gnr.py <file.nam | folder>  no questions
     python nam_to_gnr.py --cli <path to nam_to_gnr_cli.exe> ...
 """
@@ -96,18 +96,72 @@ def jobs_for(source: Path, when: dt.datetime) -> list[tuple[Path, Path]]:
 
 
 def ask_source() -> Path | None:
-    from tkinter import Tk, filedialog, messagebox
+    """Small window: Single file / Directory / Cancel, then the matching file or folder picker."""
+    from tkinter import Tk, filedialog, ttk
+    root = Tk()
+    root.title("NAM to GNR")
+    root.resizable(False, False)
+    choice = {"v": None}
+    frm = ttk.Frame(root, padding=16)
+    frm.grid()
+    ttk.Label(frm, text="Convert one .nam file, or every .nam file in a directory\n(and its subdirectories)?").grid(
+        column=0, row=0, columnspan=3, pady=(0, 12))
+    def pick(v):
+        choice["v"] = v
+        root.destroy()
+    ttk.Button(frm, text="Single", command=lambda: pick("single")).grid(column=0, row=1, padx=4)
+    ttk.Button(frm, text="Directory", command=lambda: pick("directory")).grid(column=1, row=1, padx=4)
+    ttk.Button(frm, text="Cancel", command=lambda: pick(None)).grid(column=2, row=1, padx=4)
+    root.protocol("WM_DELETE_WINDOW", lambda: pick(None))
+    root.mainloop()
+    if not choice["v"]:
+        return None
     root = Tk(); root.withdraw()
-    folder = messagebox.askyesnocancel("NAM to GNR", "Convert a whole folder (with its subfolders)?\n\n"
-                                       "Yes: pick a folder\nNo: pick one .nam file")
-    if folder is None:
-        p = ""
-    elif folder:
-        p = filedialog.askdirectory(title="Folder with .nam files")
+    if choice["v"] == "directory":
+        p = filedialog.askdirectory(title="Directory with .nam files")
     else:
         p = filedialog.askopenfilename(title=".nam file", filetypes=[("NAM captures", "*.nam")])
     root.destroy()
     return Path(p) if p else None
+
+
+def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]]) -> int:
+    """Convert in a background thread while a window shows a progress bar and the results."""
+    import threading
+    from tkinter import Tk, Text, ttk, END
+    root = Tk()
+    root.title("NAM to GNR")
+    frm = ttk.Frame(root, padding=12)
+    frm.grid(sticky="nsew")
+    root.columnconfigure(0, weight=1); root.rowconfigure(0, weight=1)
+    frm.columnconfigure(0, weight=1); frm.rowconfigure(2, weight=1)
+    status = ttk.Label(frm, text=f"0 of {len(jobs)}")
+    status.grid(column=0, row=0, sticky="w")
+    bar = ttk.Progressbar(frm, length=520, maximum=len(jobs), mode="determinate")
+    bar.grid(column=0, row=1, sticky="ew", pady=8)
+    log = Text(frm, width=100, height=16, wrap="none")
+    log.grid(column=0, row=2, sticky="nsew")
+    close = ttk.Button(frm, text="Close", command=root.destroy, state="disabled")
+    close.grid(column=0, row=3, sticky="e", pady=(8, 0))
+    result = {"failed": 0}
+
+    def ui(fn):                       # run fn in the Tk thread
+        root.after(0, fn)
+
+    def work():
+        for i, (src, dst) in enumerate(jobs, 1):
+            ui(lambda i=i, src=src: status.config(text=f"{i} of {len(jobs)}: {src.name}"))
+            ok, msg = convert(cli, src, dst)
+            result["failed"] += not ok
+            line = f"{'OK  ' if ok else 'FAIL'} {src}  ->  {dst}  ({msg})\n"
+            print(line, end="")
+            ui(lambda i=i, line=line: (bar.config(value=i), log.insert(END, line), log.see(END)))
+        done = len(jobs) - result["failed"]
+        ui(lambda: (status.config(text=f"Done: {done} converted, {result['failed']} failed"), close.config(state="normal")))
+
+    threading.Thread(target=work, daemon=True).start()
+    root.mainloop()
+    return result["failed"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,14 +179,16 @@ def main(argv: list[str] | None = None) -> int:
     if not jobs:
         print(f"No .nam files in {source}")
         return 1
-    failed = 0
-    for i, (src, dst) in enumerate(jobs, 1):
-        ok, msg = convert(cli, src, dst)
-        failed += not ok
-        print(f"[{i}/{len(jobs)}] {'OK  ' if ok else 'FAIL'} {src}  ->  {dst.name}  ({msg})")
-    print(f"\n{len(jobs) - failed} converted, {failed} failed.")
-    if not args.source:
-        input("Press Enter to close.")
+    if not args.source:               # started without arguments: windows all the way
+        failed = run_with_progress(cli, jobs)
+    else:
+        failed = 0
+        for i, (src, dst) in enumerate(jobs, 1):
+            ok, msg = convert(cli, src, dst)
+            failed += not ok
+            filled = round(30 * i / len(jobs))
+            print(f"[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {'OK  ' if ok else 'FAIL'} {src}  ->  {dst.name}  ({msg})")
+        print(f"\n{len(jobs) - failed} converted, {failed} failed.")
     return 1 if failed else 0
 
 
