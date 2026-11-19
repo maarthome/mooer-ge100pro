@@ -68,12 +68,10 @@
   .pstate.dirty { color: var(--led); }
 
   /* signal chain */
-  .chain { position: relative; display: grid; grid-template-columns: repeat(10, minmax(84px, 1fr)); gap: 10px; margin: 0 0 28px; padding: 6px 0; }
-  .chain::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px; background: #1f262e; border-radius: 2px; }
-  @media (max-width: 1180px) { .chain { grid-template-columns: repeat(5, 1fr); } .chain::before { display: none; } }
-  .slot { position: relative; min-height: 6.6rem; border-radius: var(--r); background: color-mix(in srgb, var(--raised), var(--g, var(--raised)) 38%); border: 1px solid var(--edge); border-top: 4px solid var(--g, var(--edge)); }
+  .chain { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(5.6 * var(--fs-block, 15px) + 16px), 1fr)); gap: 10px; margin: 0 0 28px; padding: 6px 0; }
+  .slot { position: relative; display: flex; border-radius: var(--r); background: color-mix(in srgb, var(--raised), var(--g, var(--raised)) 38%); border: 1px solid var(--edge); border-top: 4px solid var(--g, var(--edge)); }
   .slot:hover { border-color: var(--dim); border-top-color: var(--g, var(--dim)); }
-  .slot .main { all: unset; box-sizing: border-box; position: absolute; inset: 0; padding: 8px 10px 8px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; border-radius: var(--r); }
+  .slot .main { all: unset; box-sizing: border-box; position: relative; flex: 1; min-width: 0; min-height: 6.2rem; padding: 8px 10px 8px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; border-radius: var(--r); }
   .slot .main:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
   .slot[draggable="true"] .main { cursor: grab; }
   .slot.dragging { opacity: .45; }
@@ -86,7 +84,7 @@
   .slot.vacant .main { cursor: default; }
   .slot.vacant { background: var(--chassis); border-style: dashed; border-top-width: 1px; color: var(--led-off); }
   .slot .pos { margin-right: 22px;  font-size: 0.8rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: 1rem; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+  .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: var(--fs-block, 15px); line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: break-word; }
   .slot .snum { font-size: 0.8667rem; color: var(--dim); font-variant-numeric: tabular-nums; }
   .slot.off .smodel { color: var(--dim); }
   .slot .cursor { position: absolute; bottom: -7px; left: 50%; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: var(--led); display: none; }
@@ -105,10 +103,10 @@
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
   .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
   .knobs { display: flex; flex-wrap: wrap; gap: 18px 26px; }
-  .knob { width: 104px; display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
+  .knob { width: max(104px, calc(7 * var(--fs-param, 13px))); display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
   .knob svg { width: 84px; height: 84px; cursor: ns-resize; }
   .knob .val { font-size: 1.267rem; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .knob .lbl { font-size: 0.8667rem; color: var(--dim); text-align: center; }
+  .knob .lbl { font-size: var(--fs-param, 13px); color: var(--dim); text-align: center; line-height: 1.2; }
   .knob .val { white-space: nowrap; }
   .knob.raw { opacity: .6; }
   .knob input { width: 80px; text-align: center; background: var(--chassis); border: 1px solid var(--led); border-radius: 4px; font-size: 1.2rem; padding: 2px; }
@@ -220,8 +218,11 @@
   <form method="dialog">
     <h3>Settings</h3>
     <p class="note">Saved in this browser.</p>
+    <h4>Text size</h4>
     <div class="settings-grid">
-      <label for="setFs">Text size</label><span><input id="setFs" type="range" min="12" max="22" step="1"> <output id="setFsOut"></output></span>
+      <label for="setFsParam">Parameter names in the editor</label><span><input id="setFsParam" type="range" min="10" max="28" step="1"> <output id="setFsParamOut"></output></span>
+      <label for="setFsBlock">Block names in the chain</label><span><input id="setFsBlock" type="range" min="10" max="28" step="1"> <output id="setFsBlockOut"></output></span>
+      <label for="setFs">All other text</label><span><input id="setFs" type="range" min="12" max="22" step="1"> <output id="setFsOut"></output></span>
     </div>
     <h4>Colours</h4>
     <div class="settings-grid" id="setColours"></div>
@@ -281,6 +282,8 @@ const $ = (id) => document.getElementById(id);
 // ---------- settings: text size, colours, effect group colours (saved in this browser) ----------
 const DEFAULT_SETTINGS = {
   fontSize: 15,
+  paramFontSize: 13,
+  blockFontSize: 15,
   colours: { accent: '#ffb23e', background: '#2e3742', panels: '#38434f', text: '#edf0f2' },
   groups: { 0: '#b0894a', 1: '#c0504d', 2: '#c46a3a', 3: '#8a7a5c', 4: '#8f8f3a', 5: '#3f8fa0', 6: '#5b6fc0', 7: '#3e9a8a', 8: '#8a6fc0' },
 };
@@ -295,6 +298,8 @@ function saveSettings() { try { localStorage.setItem('ge100pro.settings', JSON.s
 function applySettings() {
   const r = document.documentElement.style;
   r.setProperty('--fs', `${settings.fontSize}px`);
+  r.setProperty('--fs-param', `${settings.paramFontSize}px`);
+  r.setProperty('--fs-block', `${settings.blockFontSize}px`);
   for (const [k, v] of Object.entries(COLOUR_VARS)) r.setProperty(v, settings.colours[k]);
 }
 const groupColour = (t) => settings.groups[t] || 'transparent';
@@ -884,9 +889,11 @@ function fail(e) {
 
 function openSettings() {
   const dlg = $('settingsDlg');
-  const fs = $('setFs');
-  fs.value = settings.fontSize; $('setFsOut').textContent = `${settings.fontSize} px`;
-  fs.oninput = () => { settings.fontSize = Number(fs.value); $('setFsOut').textContent = `${fs.value} px`; applySettings(); saveSettings(); };
+  for (const [id, key] of [['setFs', 'fontSize'], ['setFsParam', 'paramFontSize'], ['setFsBlock', 'blockFontSize']]) {
+    const el = $(id), out = $(id + 'Out');
+    el.value = settings[key]; out.textContent = `${settings[key]} px`;
+    el.oninput = () => { settings[key] = Number(el.value); out.textContent = `${el.value} px`; applySettings(); saveSettings(); };
+  }
   const mk = (box, label, value, onInput) => {
     const id = 'c' + Math.random().toString(36).slice(2, 8);
     const l = document.createElement('label'); l.htmlFor = id; l.textContent = label;
