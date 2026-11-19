@@ -103,7 +103,7 @@
   .ehead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
   .ehead h2 { margin: 0; font-size: var(--fs-heading, 22px); font-stretch: condensed; font-weight: 600; }
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
-  select.model { min-width: 240px; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
+  select.model { min-width: 312px; max-width: 100%; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   select.model option, .knob.choice select option { background: var(--panel); color: var(--silk); }
   select.model option:disabled { color: #8a8f8c; }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
@@ -969,6 +969,10 @@ function renderEditor() {
     sel.appendChild(o);
   }
   sel.value = String(cur);
+  requestAnimationFrame(() => {             // 1.3 times the width the longest name needs
+    sel.style.width = '';
+    if (sel.offsetWidth) sel.style.width = Math.round(sel.offsetWidth * 1.3) + 'px';
+  });
   sel.addEventListener('change', () => { if (sel.value !== '') setModel(s, Number(sel.value)); });
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
   head.style.setProperty('--g', groupColour(s.type));
