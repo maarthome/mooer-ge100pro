@@ -103,9 +103,17 @@
   .ehead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
   .ehead h2 { margin: 0; font-size: var(--fs-heading, 22px); font-stretch: condensed; font-weight: 600; }
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
-  select.model { min-width: 312px; max-width: 100%; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   select.model option, .knob.choice select option { background: var(--panel); color: var(--silk); }
-  select.model option:disabled { color: #8a8f8c; }
+  .mpick { position: relative; }
+  button.model { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 312px; max-width: calc(100vw - 40px); height: 34px; padding: 0 10px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; cursor: pointer; text-align: left; }
+  button.model .mcur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mlist { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 312px; max-width: calc(100vw - 40px); max-height: 60vh; overflow-y: auto; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .mrow { display: flex; align-items: center; border-radius: 4px; }
+  .mrow .mname { flex: 1; text-align: left; background: none; border: 0; color: var(--silk); font: inherit; padding: 6px 10px; cursor: pointer; white-space: nowrap; border-radius: 4px; }
+  .mrow:hover, .mrow:focus-within { background: color-mix(in srgb, var(--led) 18%, transparent); }
+  .mrow.cur { background: color-mix(in srgb, var(--led) 30%, transparent); }
+  .mrow.off .mname { color: #8a8f8c; cursor: not-allowed; }
+  .mrow .pm { width: 28px; height: 28px; margin: 0 4px; background: none; border: 1px solid var(--edge); border-radius: 4px; color: #8a8f8c; font: inherit; cursor: not-allowed; }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
   .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
@@ -519,9 +527,18 @@ function handle(f) {
 }
 
 // ---------- connect ------------------------------------------------------------------
-async function connect() {
+/** Connect. With exactly one GE100 Pro the browser already allows, it is opened directly; the browser's
+ *  device chooser only appears the first time (the browser needs one approval) or with several pedals.
+ *  auto: called on page load or when a pedal is plugged in; never shows the chooser. */
+async function connect(auto = false) {
+  if (app.dev || app.connecting) return;
+  app.connecting = true;
   try {
-    const [dev] = await navigator.hid.requestDevice({ filters: [{ vendorId: P.VENDOR_ID, productId: P.PRODUCT_ID }] });
+    const isPedal = (d) => d.vendorId === P.VENDOR_ID && d.productId === P.PRODUCT_ID;
+    const known = (await navigator.hid.getDevices()).filter(isPedal);
+    let dev = known.length === 1 ? known[0] : null;
+    if (!dev && auto) return;
+    if (!dev) [dev] = await navigator.hid.requestDevice({ filters: [{ vendorId: P.VENDOR_ID, productId: P.PRODUCT_ID }] });
     if (!dev) return;
     if (!dev.opened) await dev.open();
     app.dev = dev;
@@ -548,7 +565,10 @@ async function connect() {
     $('connectBtn').hidden = true;
   } catch (e) {
     fail(e);
+    app.dev = null;
     $('connectBtn').disabled = false;
+  } finally {
+    app.connecting = false;
   }
 }
 
@@ -944,6 +964,76 @@ function knobParse(k, text) {
   }
 }
 
+/** The model list: click the button, then point and click a model. User capture / IR rows carry + (load a
+ *  capture into an empty slot) and − (delete it), like Mooer Studio; those and choosing a user slot wait for a
+ *  Mooer Studio capture of the commands, because guessing them locked the pedal up. */
+const USER_HINT = 'Not possible yet: the command is still unknown (needs a Mooer Studio capture)';
+function buildModelPicker(box, s) {
+  const btn = box.querySelector('button.model'), list = box.querySelector('.mlist');
+  const cur = uiModel(s);
+  const info = typeInfo(s.type);
+  const nums = [];
+  for (let m = 0; m < modelCount(s.type); m++) nums.push(m);
+  if (cur >= modelCount(s.type)) nums.push(cur);           // the preset's own capture (93) or an unknown model
+  for (const m of nums) {
+    const row = document.createElement('div');
+    row.className = 'mrow';
+    row.setAttribute('role', 'option');
+    row.dataset.m = m;
+    const label = m === cur && m >= modelCount(s.type)
+      ? modelLabel(s.type, m, s.text) + (m === USER_MODEL ? '' : ' (unknown)') : modelLabel(s.type, m);
+    const ok = m === cur || modelSelectable(s.type, m);
+    row.innerHTML = '<button type="button" class="mname"></button>';
+    const name = row.firstChild;
+    name.textContent = label;
+    if (!ok) { name.setAttribute('aria-disabled', 'true'); name.title = USER_HINT; row.classList.add('off'); }
+    if (m === cur) { row.classList.add('cur'); row.setAttribute('aria-selected', 'true'); }
+    name.addEventListener('click', () => { if (!ok) return; close(); if (m !== cur) setModel(s, m); });
+    if (m >= info.models.length && m < modelCount(s.type)) {   // a user slot: + or −
+      const empty = / \| EMPTY$/.test(label);
+      const pm = document.createElement('button');
+      pm.type = 'button';
+      pm.className = 'pm';
+      pm.textContent = empty ? '+' : '−';
+      pm.setAttribute('aria-label', (empty ? 'Load a capture into ' : 'Delete the capture in ') + label.split(' | ')[0]);
+      pm.title = USER_HINT;
+      pm.setAttribute('aria-disabled', 'true');
+      pm.addEventListener('click', (e) => { e.stopPropagation(); toast(USER_HINT, true); });
+      row.appendChild(pm);
+    }
+    list.appendChild(row);
+  }
+  btn.querySelector('.mcur').textContent = list.querySelector('.cur .mname')?.textContent || '';
+  const rows = () => Array.from(list.querySelectorAll('.mname'));
+  function open() {
+    list.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+    const c = list.querySelector('.cur .mname') || rows()[0];
+    c.scrollIntoView({ block: 'center' });
+    c.focus();
+    setTimeout(() => document.addEventListener('pointerdown', outside), 0);
+  }
+  function close() {
+    list.hidden = true;
+    btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', outside);
+  }
+  function outside(e) { if (!box.contains(e.target)) close(); }
+  btn.addEventListener('click', () => (list.hidden ? open() : close()));
+  list.addEventListener('keydown', (e) => {
+    const all = rows(), i = all.indexOf(document.activeElement);
+    if (e.key === 'Escape') { close(); btn.focus(); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { all[Math.min(all.length - 1, i + 1)].focus(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { all[Math.max(0, i - 1)].focus(); e.preventDefault(); }
+  });
+  requestAnimationFrame(() => {             // 1.3 times the width the longest name needs
+    list.style.visibility = 'hidden'; list.hidden = false;
+    const w = Math.round(list.scrollWidth * 1.3);
+    list.hidden = true; list.style.visibility = '';
+    if (w) { btn.style.width = w + 'px'; list.style.width = w + 'px'; }
+  });
+}
+
 function renderEditor() {
   const ed = $('editor');
   ed.textContent = '';
@@ -953,27 +1043,8 @@ function renderEditor() {
   head.className = 'ehead';
   head.innerHTML = `<h2></h2>
     <button class="switch" aria-pressed="${s.enabled}"><span class="led${s.enabled ? ' on' : ''}"></span>${s.enabled ? 'On' : 'Off'}</button>
-    <select class="model" aria-label="Model"></select>`;
-  const sel = head.querySelector('select.model');
-  for (let m = 0; m < modelCount(s.type); m++) {
-    // all user slots are listed, like Mooer Studio, but can't be chosen yet (see modelSelectable)
-    const o = document.createElement('option');
-    o.value = m; o.textContent = modelLabel(s.type, m);
-    o.disabled = !modelSelectable(s.type, m) && m !== uiModel(s);
-    sel.appendChild(o);
-  }
-  const cur = uiModel(s);
-  if (cur >= modelCount(s.type)) {          // a model the editor doesn't know: still show it
-    const o = document.createElement('option');
-    o.value = cur; o.textContent = modelLabel(s.type, cur, s.text) + (cur === USER_MODEL ? '' : ' (unknown)');
-    sel.appendChild(o);
-  }
-  sel.value = String(cur);
-  requestAnimationFrame(() => {             // 1.3 times the width the longest name needs
-    sel.style.width = '';
-    if (sel.offsetWidth) sel.style.width = Math.round(sel.offsetWidth * 1.3) + 'px';
-  });
-  sel.addEventListener('change', () => { if (sel.value !== '') setModel(s, Number(sel.value)); });
+    <div class="mpick"><button class="model" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="mcur"></span><span class="caret" aria-hidden="true">▾</span></button><div class="mlist" role="listbox" aria-label="Model" hidden></div></div>`;
+  buildModelPicker(head.querySelector('.mpick'), s);
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
   head.style.setProperty('--g', groupColour(s.type));
   head.querySelector('.switch').addEventListener('click', () => toggleSlot(s));
@@ -1133,7 +1204,7 @@ function openSettings() {
 applySettings();
 $('settingsBtn').addEventListener('click', openSettings);
 $('creditsBtn').addEventListener('click', () => $('creditsDlg').showModal());
-$('connectBtn').addEventListener('click', connect);
+$('connectBtn').addEventListener('click', () => connect(false));
 $('saveBtn').addEventListener('click', save);
 $('bin').addEventListener('dragover', (e) => {
   if (app.dragFrom === null || app.dragFrom === undefined) return;
@@ -1156,7 +1227,12 @@ $('logBtn').addEventListener('click', () => {
   $('logBtn').setAttribute('aria-expanded', String(open));
 });
 if (!('hid' in navigator)) { $('noHid').hidden = false; $('connectBtn').disabled = true; }
-else navigator.hid.addEventListener('disconnect', (e) => { if (e.device === app.dev) disconnected(); });
+else {
+  navigator.hid.addEventListener('disconnect', (e) => { if (e.device === app.dev) disconnected(); });
+  // plugged in or switched on: connect by itself (only to a pedal the browser already allows)
+  navigator.hid.addEventListener('connect', () => setTimeout(() => connect(true), 1500));
+  connect(true);
+}
 </script>
 </body>
 </html>
