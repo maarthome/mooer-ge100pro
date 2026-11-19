@@ -24,6 +24,12 @@ No code was copied from these projects; their published findings shaped what we 
 | [fingerskier/Mooer_GE150_Pro_Li-IO](https://github.com/fingerskier/Mooer_GE150_Pro_Li-IO) | GE150 Max | that the newer Mooer units use vendor ID `34db` with HID endpoints `0x85`/`0x05`, and the capture-driven, test-backed way of working |
 | [ThijsWithaar/MooerManager](https://github.com/ThijsWithaar/MooerManager) | GE200 | the earliest public decoding of a Mooer USB protocol (Wireshark dissector) |
 
+## Documentation used
+
+| Source | What we use |
+|---|---|
+| MOOER GE100 Pro / GE100 Pro Li owner's manual (French edition, via [rockboard.de](https://cdn.rockboard.de/nos/data/erp/Artikell_PDF/Manual_PDF/Mooer/FR/ME_GE_100_Pro___Pro_LI_Manual_FR.pdf)) | the model lists of all effect categories (`src/ge100pro/models.json`) and the 50 × 3 preset banks |
+
 ## Reviewed, nothing used
 
 Checked during the research; they contain no USB protocol work that applies to the GE100 Pro.

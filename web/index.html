@@ -51,7 +51,7 @@
   .presets { background: var(--panel); border-right: 1px solid var(--edge); display: flex; flex-direction: column; min-height: 0; }
   .search { margin: 12px; padding: 7px 10px; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); }
   .plist { list-style: none; margin: 0; padding: 0 0 12px; overflow-y: auto; flex: 1; }
-  .plist button { width: 100%; display: grid; grid-template-columns: 34px 1fr; gap: 6px; text-align: left; background: none; border: 0; padding: 5px 14px; cursor: pointer; }
+  .plist button { width: 100%; display: grid; grid-template-columns: 44px 1fr; gap: 6px; text-align: left; background: none; border: 0; padding: 5px 14px; cursor: pointer; }
   .plist button:hover:not(:disabled) { background: var(--raised); }
   .plist .num { color: var(--dim); font-variant-numeric: tabular-nums; }
   .plist .empty .nm { color: var(--led-off); }
@@ -61,7 +61,7 @@
   /* main */
   main { padding: 24px 28px 40px; overflow-y: auto; min-width: 0; }
   .screen { display: flex; align-items: baseline; gap: 18px; margin-bottom: 22px; }
-  .pnum { font-size: 64px; line-height: .9; font-weight: 700; color: var(--led); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,178,62,.35); }
+  .pnum { font-size: 60px; line-height: .9; font-weight: 700; color: var(--led); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,178,62,.35); }
   .pname { font-size: 34px; font-weight: 600; font-stretch: condensed; line-height: 1.05; overflow-wrap: anywhere; }
   .pstate { color: var(--dim); font-size: 14px; margin-top: 4px; }
   .pstate.dirty { color: var(--led); }
@@ -73,11 +73,11 @@
   .slot { position: relative; min-height: 92px; padding: 10px 10px 8px; border-radius: var(--r); background: var(--raised); border: 1px solid var(--edge); text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
   .slot:hover { border-color: var(--dim); }
   .slot.sel { border-color: var(--led); box-shadow: 0 0 0 1px var(--led); }
-  .slot.off .stype { color: var(--dim); }
   .slot.vacant { background: var(--chassis); border-style: dashed; cursor: default; color: var(--led-off); }
-  .slot .pos { font-size: 12px; color: var(--dim); }
-  .slot .stype { font-weight: 600; font-stretch: condensed; font-size: 16px; }
-  .slot .smodel { font-size: 13px; color: var(--dim); }
+  .slot .pos { font-size: 12px; color: var(--dim); padding-right: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: 15px; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+  .slot .snum { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .slot.off .smodel { color: var(--dim); }
   .slot .led { position: absolute; top: 10px; right: 10px; }
   .slot .cursor { position: absolute; bottom: -7px; left: 50%; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: var(--led); display: none; }
   .slot.pedalcursor .cursor { display: block; }
@@ -89,7 +89,7 @@
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
   .stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; }
   .stepper button { background: var(--raised); border: 0; width: 32px; height: 32px; cursor: pointer; font-size: 18px; }
-  .stepper output { min-width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
+  .stepper output { min-width: 200px; padding: 0 10px; text-align: center; font-variant-numeric: tabular-nums; }
   .note { color: var(--dim); font-size: 13px; max-width: 70ch; }
   .knobs { display: flex; flex-wrap: wrap; gap: 18px 26px; }
   .knob { width: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
@@ -203,10 +203,30 @@
 </dialog>
 
 <script src="protocol.js"></script>
+<script src="models.js"></script>
 <script>
 'use strict';
 const P = window.GE100;
+const M = window.GE100_MODELS;
 const $ = (id) => document.getElementById(id);
+
+/** Preset 1..150 as the pedal shows it: 50 banks of 3, 1 = 01A, 2 = 01B, 3 = 01C, 4 = 02A … */
+const bankLabel = (n) => `${String(Math.ceil(n / 3)).padStart(2, '0')}${'ABC'[(n - 1) % 3]}`;
+const typeInfo = (t) => M.types[String(t)] || { name: `Type ${t}`, models: [] };
+const typeName = (t) => typeInfo(t).name;
+/** Number of selectable models of a type: factory models + user capture/IR slots. */
+const modelCount = (t) => typeInfo(t).models.length + (typeInfo(t).user_slots || 0);
+/** Model as the pedal shows it, e.g. "01 | 65 US DX"; user slots show the capture name read from the pedal. */
+function modelLabel(type, model) {
+  const info = typeInfo(type), n = String(model + 1).padStart(2, '0');
+  if (model < info.models.length) return `${n} | ${info.models[model]}`;
+  const u = model - info.models.length + 1;
+  if (info.user_slots && u <= info.user_slots) {
+    const name = info.user_list !== undefined && app.userNames[info.user_list] && app.userNames[info.user_list][u];
+    return `${n} | ${name || `User ${u} (empty)`}`;
+  }
+  return `${n} | Model ${model}`;
+}
 
 const app = {
   dev: null,
@@ -218,6 +238,8 @@ const app = {
   preset: null,       // {preset, name, slots}
   sel: null,          // selected slot index
   pedalCursor: null,  // slot under the pedal's cursor
+  userNames: {},      // list type -> {index: name}, read from the pedal with 0x65 (2 = user amp captures)
+  followTimer: null,
   dirty: false,
   busy: false,
   showAll: false,
@@ -275,8 +297,18 @@ function handle(f) {
   const R = P.REPLY, p = f.payload;
   if (f.cmd === R.STATE || f.cmd === R.STATUS) {
     app.state = Uint8Array.from(p);
-    if (f.cmd === R.STATUS && app.preset && p[0] !== app.preset.preset) markCurrent(p[0]);
+    if (f.cmd === R.STATUS && app.preset && p[0] !== app.preset.preset && !app.busy) {
+      // preset changed on the pedal: it usually pushes 0x32 by itself, but not always, so ask if it doesn't
+      clearTimeout(app.followTimer);
+      app.followTimer = setTimeout(() => send(P.CMD.CURRENT_PRESET), 500);
+    }
+  } else if (f.cmd === R.LIST) {
+    for (const e of P.parseList(p)) {
+      (app.userNames[e.type] = app.userNames[e.type] || {})[e.index] = e.used ? e.name : '';
+    }
+    renderPreset();
   } else if (f.cmd === R.PRESET_DUMP) {
+    clearTimeout(app.followTimer);
     app.preset = P.parsePreset(p);
     app.dirty = false;
     app.toSend.clear();
@@ -315,6 +347,8 @@ async function connect() {
       n.names.forEach((s, i) => { app.names[n.first + i] = s; });
     }
     renderList();
+    // names of the 20 user amp slots (NAM/MNRS captures), exactly as Mooer Studio asks
+    await request(P.CMD.LIST, [0x02, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
     await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
     $('intro').hidden = true;
     $('preset').hidden = false;
@@ -388,8 +422,8 @@ function openPage(slot) {
 async function save() {
   if (!app.preset || !app.dev) return;
   const n = app.preset.preset;
-  $('saveTitle').textContent = `Save to preset ${n}`;
-  $('saveText').textContent = `This permanently replaces what is stored in preset ${n} ("${app.names[n] || app.preset.name}") with the sound you hear now.`;
+  $('saveTitle').textContent = `Save to preset ${bankLabel(n)}`;
+  $('saveText').textContent = `This permanently replaces what is stored in preset ${bankLabel(n)} ("${app.names[n] || app.preset.name}") with the sound you hear now.`;
   $('saveName').value = app.preset.name;
   const dlg = $('saveDlg');
   dlg.showModal();
@@ -403,13 +437,13 @@ async function save() {
     app.preset.name = name;
     app.dirty = false;
     renderPreset(); renderList();
-    toast(`Saved preset ${n}`);
+    toast(`Saved preset ${bankLabel(n)}`);
   } catch (e) { fail(e); }
 }
 
 function askDiscard() {
   const dlg = $('discardDlg');
-  $('discardText').textContent = `Preset ${app.preset.preset} has changes that are not saved. Switching presets discards them.`;
+  $('discardText').textContent = `Preset ${bankLabel(app.preset.preset)} has changes that are not saved. Switching presets discards them.`;
   dlg.showModal();
   return new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue === 'discard'), { once: true }));
 }
@@ -422,13 +456,13 @@ function renderList() {
   for (let n = 1; n <= 150; n++) {
     const nm = app.names[n];
     if (nm === undefined) continue;
-    if (q && !nm.toLowerCase().includes(q) && String(n) !== q) continue;
+    if (q && !nm.toLowerCase().includes(q) && bankLabel(n).toLowerCase() !== q && !bankLabel(n).toLowerCase().startsWith(q)) continue;
     const li = document.createElement('li');
     const b = document.createElement('button');
     if (nm === 'EMPTY') b.classList.add('empty');
     if (app.preset && app.preset.preset === n) { b.classList.add('cur'); b.setAttribute('aria-current', 'true'); }
     b.disabled = app.busy;
-    b.innerHTML = `<span class="num">${n}</span><span class="nm"></span>`;
+    b.innerHTML = `<span class="num">${bankLabel(n)}</span><span class="nm"></span>`;
     b.querySelector('.nm').textContent = nm === 'EMPTY' ? 'Empty' : nm;
     b.addEventListener('click', () => selectPreset(n));
     li.appendChild(b);
@@ -446,12 +480,12 @@ function renderState() {
   el.textContent = app.dirty ? 'Changed, not saved' : 'Saved on the pedal';
   el.className = 'pstate' + (app.dirty ? ' dirty' : '');
   $('saveBtn').disabled = !app.dev || !app.preset;
-  $('saveBtn').textContent = app.preset ? `Save to preset ${app.preset.preset}` : 'Save';
+  $('saveBtn').textContent = app.preset ? `Save to preset ${bankLabel(app.preset.preset)}` : 'Save';
 }
 
 function renderPreset() {
   if (!app.preset) return;
-  $('pnum').textContent = app.preset.preset;
+  $('pnum').textContent = bankLabel(app.preset.preset);
   $('pname').textContent = app.preset.name;
   renderState();
   renderChain();
@@ -459,7 +493,6 @@ function renderPreset() {
   renderList();
 }
 
-const typeName = (t) => P.TYPE_NAMES[t] || `Type ${t}`;
 
 function renderChain() {
   const c = $('chain');
@@ -469,10 +502,13 @@ function renderChain() {
     const b = document.createElement('button');
     b.className = 'slot' + (s.used ? '' : ' vacant') + (s.used && !s.enabled ? ' off' : '') + (app.sel === s.index ? ' sel' : '') + (app.pedalCursor === s.index ? ' pedalcursor' : '');
     b.setAttribute('role', 'listitem');
-    b.innerHTML = `<span class="pos">${s.index + 1}</span><span class="stype"></span><span class="smodel"></span>${s.used ? `<span class="led${s.enabled ? ' on' : ''}" aria-hidden="true"></span>` : ''}<span class="cursor" aria-hidden="true"></span>`;
-    b.querySelector('.stype').textContent = s.used ? typeName(s.type) : 'Empty';
-    b.querySelector('.smodel').textContent = s.used ? `Model ${s.model}${s.enabled ? '' : ', off'}` : '';
-    b.setAttribute('aria-label', s.used ? `Slot ${s.index + 1}: ${typeName(s.type)}, model ${s.model}, ${s.enabled ? 'on' : 'off'}` : `Slot ${s.index + 1}: empty`);
+    b.innerHTML = `<span class="pos"></span><span class="snum"></span><span class="smodel"></span>${s.used ? `<span class="led${s.enabled ? ' on' : ''}" aria-hidden="true"></span>` : ''}<span class="cursor" aria-hidden="true"></span>`;
+    b.querySelector('.pos').textContent = `${s.index + 1}  ${s.used ? typeName(s.type) : ''}`;
+    const label = s.used ? modelLabel(s.type, s.model) : '';
+    b.querySelector('.snum').textContent = s.used ? label.split(' | ')[0] : '';
+    b.querySelector('.smodel').textContent = s.used ? label.split(' | ').slice(1).join(' | ') : 'Empty';
+    b.title = s.used ? `${typeName(s.type)}: ${label}${s.enabled ? '' : ' (off)'}` : '';
+    b.setAttribute('aria-label', s.used ? `Slot ${s.index + 1}: ${typeName(s.type)}, ${modelLabel(s.type, s.model)}, ${s.enabled ? 'on' : 'off'}` : `Slot ${s.index + 1}: empty`);
     if (s.used) b.addEventListener('click', () => { app.sel = s.index; renderChain(); renderEditor(); openPage(s); });
     else b.disabled = true;
     c.appendChild(b);
@@ -490,7 +526,8 @@ function renderEditor() {
   head.className = 'ehead';
   head.innerHTML = `<h2></h2>
     <button class="switch" aria-pressed="${s.enabled}"><span class="led${s.enabled ? ' on' : ''}"></span>${s.enabled ? 'On' : 'Off'}</button>
-    <span class="stepper" role="group" aria-label="Model"><button aria-label="Previous model">−</button><output>Model ${s.model}</output><button aria-label="Next model">+</button></span>`;
+    <span class="stepper" role="group" aria-label="Model"><button aria-label="Previous model">−</button><output></output><button aria-label="Next model">+</button></span>`;
+  head.querySelector('.stepper output').textContent = modelLabel(s.type, s.model);
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
   head.querySelector('.switch').addEventListener('click', () => { s.enabled = !s.enabled; pushSlot(s.index); renderChain(); renderEditor(); });
   const [prev, next] = head.querySelectorAll('.stepper button');
@@ -515,7 +552,7 @@ function renderEditor() {
 
 function changeModel(s, d) {
   const m = s.model + d;
-  if (m < 0 || m > 99) return;
+  if (m < 0 || m >= modelCount(s.type)) return;
   s.model = m;
   pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
   renderChain(); renderEditor();

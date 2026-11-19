@@ -7,9 +7,14 @@ See PROTOCOL.md for which fields are verified [V] and which are guesses [H].
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
 from .framing import Frame
+
+#: Model lists per slot type, from the GE100 Pro manual (see models.json)
+MODELS = json.loads((Path(__file__).with_name("models.json")).read_text(encoding="utf-8"))["types"]
 
 # --- host -> pedal, read requests (seen from Mooer Studio) ---------------------------------
 REQ_DEVICE_INFO = 0x01    # payload 00                  -> 0x02
@@ -41,8 +46,25 @@ SLOT_PARAMS = 11          # u16 LE parameters per slot
 SLOT_RECORD_SIZE = 50     # one chain slot: 4 words + 11 params + 20-byte text
 PRESET_SLOTS = 10         # slot records in a preset dump
 
-#: Slot type numbers seen so far; names follow the Prime M2 numbering where the parameters match. [H]
-SLOT_TYPES = {0: "?0", 1: "DRIVE", 2: "AMP", 3: "CAB", 4: "DYNA", 5: "?5 (EQ-like)", 7: "DELAY", 8: "REVERB"}
+#: Slot type = position of the category in the manual's model list
+SLOT_TYPES = {int(k): v["name"] for k, v in MODELS.items()}
+
+
+def bank_label(preset: int) -> str:
+    """Preset 1..150 as the pedal shows it: 50 banks of 3, 1 = 01A, 2 = 01B, 3 = 01C, 4 = 02A."""
+    return f"{(preset + 2) // 3:02d}{'ABC'[(preset - 1) % 3]}"
+
+
+def model_label(slot_type: int, model: int) -> str:
+    """Model as the pedal shows it, e.g. '01 | 65 US DX' (the wire model number is 0-based)."""
+    info = MODELS.get(str(slot_type), {"models": []})
+    names = info["models"]
+    if model < len(names):
+        return f"{model + 1:02d} | {names[model]}"
+    if model - len(names) < info.get("user_slots", 0):
+        return f"{model + 1:02d} | User {model - len(names) + 1}"
+    return f"{model + 1:02d} | ?"
+
 
 REQUEST_NAMES = {
     REQ_DEVICE_INFO: "GET_DEVICE_INFO",
@@ -95,6 +117,10 @@ class Slot:
     @property
     def type_name(self) -> str:
         return SLOT_TYPES.get(self.type, f"?{self.type}")
+
+    @property
+    def model_name(self) -> str:
+        return model_label(self.type, self.model)
 
 
 def parse_slot(index: int, rec: bytes) -> Slot:
@@ -212,7 +238,7 @@ def describe_request(r: Request) -> str:
 def describe_slot(s: Slot) -> str:
     if not s.used:
         return f"slot {s.index}: empty"
-    return (f"slot {s.index}: {s.type_name}(type={s.type}) model={s.model} on={int(s.enabled)} "
+    return (f"slot {s.index}: {s.type_name} [{s.model_name}] (type={s.type} model={s.model}) on={int(s.enabled)} "
             f"params={s.params} text='{s.text}'")
 
 
@@ -224,18 +250,19 @@ def describe(frame: Frame, direction: str = "pedal") -> str:
         return f"{prefix}HOST >   {describe_request(m)}"
     if isinstance(m, State):
         kind = "STATUS  " if m.pushed else "STATE   "
-        return f"{prefix}{kind} preset={m.preset:3d}  value2={m.value2:3d}  raw={m.raw.hex()}"
+        return f"{prefix}{kind} preset={bank_label(m.preset)} ({m.preset:3d})  value2={m.value2:3d}  raw={m.raw.hex()}"
     if isinstance(m, Slot):
         return f"{prefix}SLOT     {describe_slot(m)}"
     if isinstance(m, PresetDump):
         kind = "PRESET22" if frame.command == STORED_PRESET else "PRESET  "
-        lines = [f"{prefix}{kind} #{m.preset:3d} name='{m.name}'"]
+        lines = [f"{prefix}{kind} {bank_label(m.preset)} (#{m.preset}) name='{m.name}'"]
         lines += [f"           {describe_slot(s)}" for s in m.slots if s.used]
         return "\n".join(lines)
     if isinstance(m, DeviceInfo):
         return f"{prefix}DEVICE   name='{m.name}' firmware='{m.firmware}' extra={m.extra.hex(' ')}"
     if isinstance(m, Names):
-        return f"{prefix}NAMES    {m.first}-{m.last}: " + ", ".join(m.names)
+        return (f"{prefix}NAMES    {bank_label(m.first)}-{bank_label(m.last)}: "
+                + ", ".join(f"{bank_label(m.first + i)} {n}" for i, n in enumerate(m.names)))
     if isinstance(m, Navigation):
         return f"{prefix}NAV      page=0x{m.page:02x} slot={m.slot}"
     if frame.command in ACK_NAMES:

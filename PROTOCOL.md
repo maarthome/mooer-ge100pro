@@ -132,19 +132,28 @@ The chain has 10 positions. In preset 82 slots 0–5 and 9 are used, 6–8 empty
 
 `27` = `slot index (1 byte)` + this 50-byte record [V].
 
-Effect types seen (names where the parameter count and values fit the Prime M2's types) [H]:
+**Effect types and models.** The type number is the position of the category in the manual's model list, and the
+model number is the 0-based position in that category's list: model 0 is shown on the pedal as `01`. The lists are
+in `src/ge100pro/models.json` (from the GE100 Pro owner's manual) [V for amp: model 0 = "01 | 65 US DX" confirmed on
+the pedal; the decoded presets make sense, e.g. 28A "JP Lead" = 28 MARKV DS amp, 22 GOLD CLON drive, 09 Dual Delay
+with two delay times].
 
-| Type | Seen as | Parameters seen |
-|---|---|---|
-| 0 | PRE-FX? (models 6, 7, 9) | 4: e.g. 100, 86, 43, 53 |
-| 1 | DRIVE (model 21) | 100, 10 (Gain, Tone? …) |
-| 2 | AMP (model 27) | 6: 70, 57, 48, 26, 25, 75 (Gain, Bass, Mid, Treble, Presence, Master) |
-| 3 | CAB (model 42), slot 9 | 0, 7941, 23 |
-| 4 | DYNA (model 1) | 4: 30, 85, 30, 50 (Attack, Ratio, Threshold, Level?) |
-| 5 | EQ (models 2, 5) | model 2: 5 × ~16 (band gains, centre 16?); model 5: 22, 110, 7, **800**, 14, **1513/4000** (gain/freq pairs?) |
-| 6 | MOD (models 9, 12) | 3–4: e.g. 11, 26, 28, 47 (Rate, Mix, Tone, Depth as on the M2?) |
-| 7 | DELAY (models 0, 2, 4, 6, 8, 9) | see below |
-| 8 | REVERB (model 1) | 4: 0, 21, 50, 35 (Pre Delay, Level, Decay, Tone, as on the M2) |
+| Type | Category | Models | Parameters seen |
+|---|---|---|---|
+| 0 | Pre FX (wah, compressors) | 15 | e.g. Yellow Comp 100, 86, 43, 53 |
+| 1 | Drive | 35 | e.g. GOLD CLON 100, 10 |
+| 2 | Amp | 72 + 20 user capture slots (73–92) | 6: Gain, Bass, Mid, Treble, Presence, Master (order as on Mooer amps [H]) |
+| 3 | Cab | 67 + 20 user IR slots (68–87) | e.g. 0, 7941, 23 |
+| 4 | Noise reduction | 3 | e.g. Noise Suppressor 30, 85, 30, 50 |
+| 5 | EQ | 6 | HM-EQ: 5 × ~16 (band gains, centre 16?); Custom EQ: 22, 110, 7, **800**, 14, **1513/4000** (gain/freq pairs?) |
+| 6 | Modulation | 27 | e.g. Analog Chorus 11, 26, 28, 47 |
+| 7 | Delay | 12 | see below; Dual Delay holds two times (222, 423 ms) |
+| 8 | Reverb | 9 | 4: 0, 21, 50, 35 (Pre Delay, Level, Decay, Tone as on the Prime M2? [H]) |
+
+Knob names and ranges per model are **not** in the manual, and the pedal has not been seen sending them; Mooer Studio
+has them built in. Open question.
+
+**Preset numbering on the pedal:** 50 banks of 3: preset 1 = `01A`, 2 = `01B`, 3 = `01C`, 4 = `02A` … 150 = `50C`.
 
 Delay, observed on the pedal (preset 1, slot 3, model 9) [V]: parameter 3 = time in ms, parameter 4 = subdivision; the
 pedal recalculates the time from a 494 ms beat:
@@ -172,7 +181,8 @@ Note: the Prime M2 encodes a synced delay time as `0x8000 | index` instead; the 
 ### `66` user capture list [V for type 2]
 
 Entries of 29 bytes: `type, index (u16), used (1/0), flag (2 if used), name (24 bytes)`. Type 2 = the 20 user amp
-slots; in this pedal 1–4 hold NAM/MNRS captures ("ReverPlex CLN 1_z2", "Clean_9b5eltcb", …).
+slots, which are amp models 73–92; in this pedal 1–4 hold NAM/MNRS captures ("ReverPlex CLN 1_z2", "Clean_9b5eltcb",
+…). Whether other types have lists (user cab IRs: type 3?) is untested: `python -m ge100pro.lists --yes` asks.
 
 ## 5. Commands that change the pedal
 

@@ -80,8 +80,8 @@
   const SLOT_PARAMS = 11;
   const PRESET_SLOTS = 10;
 
-  // Effect types: names where values fit the Prime M2's types (hypothesis, see PROTOCOL.md §4)
-  const TYPE_NAMES = { 0: 'Pre FX', 1: 'Drive', 2: 'Amp', 3: 'Cab', 4: 'Dynamics', 5: 'EQ', 6: 'Modulation', 7: 'Delay', 8: 'Reverb' };
+  // Effect types = order of the categories in the manual's model list (names and models: models.js)
+  const TYPE_NAMES = { 0: 'Pre FX', 1: 'Drive', 2: 'Amp', 3: 'Cab', 4: 'Noise reduction', 5: 'EQ', 6: 'Modulation', 7: 'Delay', 8: 'Reverb' };
 
   function parseSlot(index, r) {
     return {
@@ -128,6 +128,15 @@
     return { name: text(p.subarray(0, 32)), firmware: text(p.subarray(32, 39)) };
   }
 
+  /** 0x66 user list: entries of 29 bytes: type, index (u16), used, flag, 24-byte name. */
+  function parseList(p) {
+    const out = [];
+    for (let i = 0; i + 29 <= p.length; i += 29) {
+      out.push({ type: p[i], index: u16(p, i + 1), used: p[i + 3] !== 0, flag: p[i + 4], name: text(p.subarray(i + 5, i + 29)) });
+    }
+    return out;
+  }
+
   /** 16-byte name field, space padded like the pedal's own names. */
   function nameField(name) {
     const out = new Uint8Array(16).fill(0x20);
@@ -149,7 +158,7 @@
 
   const api = {
     VENDOR_ID, PRODUCT_ID, REPORT_SIZE, CMD, REPLY, TYPE_NAMES, SLOT_RECORD, SLOT_PARAMS, PRESET_SLOTS,
-    crc16, buildMessage, buildReports, Deframer, parseSlot, encodeSlot, parsePreset, parseNames, parseDeviceInfo, nameField,
+    crc16, buildMessage, buildReports, Deframer, parseSlot, encodeSlot, parsePreset, parseNames, parseList, parseDeviceInfo, nameField,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GE100 = api;

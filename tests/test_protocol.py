@@ -173,3 +173,28 @@ def test_change_model_is_set_slot_and_pedal_confirms():
 def test_save_command_seen_in_capture_06():
     saves = _host("06_pedal_side", 0x2F)
     assert saves == [bytes([6]) + b"Single-Coil Lead"]
+
+
+# --- names ---------------------------------------------------------------------------------
+
+from ge100pro.messages import MODELS, bank_label, model_label
+
+
+def test_bank_labels():
+    assert [bank_label(n) for n in (1, 2, 3, 4, 82, 150)] == ["01A", "01B", "01C", "02A", "28A", "50C"]
+
+
+def test_model_lists_match_the_manual_counts():
+    counts = {k: len(v["models"]) for k, v in MODELS.items()}
+    assert counts == {"0": 15, "1": 35, "2": 72, "3": 67, "4": 3, "5": 6, "6": 27, "7": 12, "8": 9}
+    assert model_label(2, 0) == "01 | 65 US DX"  # as the pedal shows it
+    assert model_label(2, 72) == "73 | User 1"
+
+
+def test_web_models_js_is_in_sync():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("gen", Path(__file__).parent.parent / "tools" / "gen_models_js.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    current = (Path(__file__).parent.parent / "web" / "models.js").read_text(encoding="utf-8")
+    assert current == gen.render(), "run: python3 tools/gen_models_js.py"

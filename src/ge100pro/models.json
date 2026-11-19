@@ -1,0 +1,57 @@
+{
+  "_source": "Model lists from the MOOER GE100 Pro owner's manual (French edition, rockboard.de), in the manual's order. The wire model number is 0-based: model 0 = number 01. Names marked in 'translated' were printed in French and are given here in English; the pedal may spell them differently.",
+  "_types": "Wire slot type = position of the category in the manual: 0 pre-effects, 1 drive, 2 amp, 3 cab, 4 noise reduction, 5 EQ, 6 modulation, 7 delay, 8 reverb.",
+  "types": {
+    "0": {"name": "Pre FX", "short": "FX", "models": [
+      "GCB95 Wah", "535 Wah", "Auto Wah", "Talk Wah AH", "Talk Wah OH", "Touch Wah", "Yellow Comp", "Blue Comp",
+      "S-Comp", "Red Comp", "Boost Comp", "Deluxe Comp", "Blend Comp", "Limiter", "Noise Suppressor"]},
+    "1": {"name": "Drive", "short": "DS", "models": [
+      "TUBE DR", "808", "PURE BOOST", "FLEX BOOST", "OD250", "D-DRIVE", "BLACK RAT", "GREY FAZE", "MUFFY",
+      "FUZZ DEPARTMENT", "MTL ZONE", "MTL MASTER", "OBSESSIVE DIST", "JIMMY OD", "FULL DRV", "SHRED", "BEEBEE PRE",
+      "BEEBEE +", "RIET", "TIGHT DS", "FULL DS", "GOLD CLON", "VX TUBE OD", "TIGHT METAL", "THE JUICER",
+      "RUMBLE DRIVE", "SOLO", "BLUES MOOD", "BLUES CRAB", "HUSTLE DRIVE", "BLADE", "ROD881", "RED AT", "ODR 1", "BE OD"]},
+    "2": {"name": "Amp", "short": "AMP", "user_slots": 20, "user_list": 2, "models": [
+      "65 US DX", "65 US TW", "62 US DLX", "55 US TD", "59 US BASS", "US SONIC", "US BLUES CL", "US BLUES OD",
+      "MATCHBOX 30 CL", "MATCHBOX 30 OD", "J800", "J900", "PLX 100", "E650 CL", "E650 DS", "CAA OD100 CH1",
+      "CAA OD100 CH2", "CAA OD100 CH3", "SPT 100 CL", "SPT 100 DS", "POWER BELL CL", "POWER BELL DS", "BLACKNIGHT CL",
+      "BLACKNIGHT DS", "MARKIII CL", "MARKIII DS", "MARKV CL", "MARKV DS", "TRI REC CL", "TRI REC DS", "Cali BLD CL",
+      "Cali BLD CR", "Cali BLD DS", "ROCK VRB CL", "ROCK VRB DS", "CITRUS 30", "CITRUS 50", "SLOW 100 CR",
+      "SLOW 100 DS", "DR.ZEE 18 JR", "DR.ZEE RECK", "JET 100H CL", "JET 100H OD", "JAZZ 120", "UK30 CL", "UK30 OD",
+      "HWT 103", "PV 5050 CL", "PV 5050 DS", "REGAL TONE CL", "REGAL TONE OD1", "REGAL TONE OD2", "CAROL CL",
+      "CAROL OD", "CARDEFF", "EV 5050 CL", "EV 5050 DS", "HT CLUB CL", "HT CLUB DS", "HUGEN CL", "HUGEN OD",
+      "HUGEN DS", "KOCHE OD", "KOCHE DS", "AMPOG B18 CL", "AMPOG B18 DS", "AMPOG SVT 4", "AKUILA 750",
+      "MVRKBASS 500", "G-BASE 700+", "KARVIN B1500", "HNK BASS POWER"]},
+    "3": {"name": "Cab", "short": "CAB", "user_slots": 20, "models": [
+      "US DLX 112", "US TWN 212", "US BASS 410", "SONIC 112", "BLUES 112", "MATCHBOX 30 112", "1960 412", "EAGLE P412",
+      "EAGLE S412", "CUSTOM 112", "CUSTOM 212", "CUSTOM 412", "SPT 112", "SPT 212", "SPT 412", "CALI 412 A",
+      "CALI 412 B", "CALI 412 C", "REC 412", "CITRUS 112", "CITRUS 212", "CITRUS 412", "SLOW 412", "DR.ZEE 112",
+      "DR.ZEE 212", "JAZZ 212", "UK 212", "HWT 412", "PV 5050 412", "REGAL TONE FLN 110", "REGAL TONE SK 112",
+      "TWO STONES 212", "CARDEFF 112", "EV 5050 212", "EV 5050 412", "HT 412", "DIESEL 412", "CT-FEND S 212",
+      "CT-FEND 67 212", "CT-BRIT JV 212", "CT-BRIT 412", "CT-BOGIE 212", "CT-BOG OS 412", "CT-VOCS 212",
+      "CT-FRAM 212", "CT-KOX 212", "CT-MGAN 212", "CT-EDD 412", "CT-FRIED 412", "CT-GAS 412", "CT-HESS 212",
+      "CT-HESS 412", "CT-HW 412", "CT-HK 412", "CT-OR 412", "CT-PVYIN 212", "CT-PVY 50 412", "CT-REVO 412",
+      "CT-RIVER 412", "CT-SOLD 412", "CT-WIN 412", "AMPOG B118", "AMPOG SV115", "AKUILA 410", "TITAN 410",
+      "CALI PH810", "HNK 115"]},
+    "4": {"name": "Noise reduction", "short": "NR", "models": ["Noise Killer", "Noise Suppressor", "Noise Gate"]},
+    "5": {"name": "EQ", "short": "EQ", "models": [
+      "3 Band EQ", "Mooer G-EQ", "Mooer HM-EQ", "Mooer G6-EQ", "Mooer B-EQ", "Custom EQ"]},
+    "6": {"name": "Modulation", "short": "MOD", "models": [
+      "Classic Phaser", "Step Phaser", "Fat Phaser", "Classic Flanger", "Jet Flanger", "Tremolo", "Square Tremolo",
+      "Pitch Vibrato", "Pitch Shift", "Detune", "Rotary Speaker", "Analog Chorus", "Tri-Chorus", "Ring Modulator",
+      "Band-pass Filter", "High-pass Filter", "Low-pass Filter", "Slow Gear", "Lo-Fi", "Multi-stage Phaser",
+      "Modern Phaser", "Pro Flanger", "Modern Flanger", "Modern Rotary", "Opto Tremolo", "Octave", "Pan"]},
+    "7": {"name": "Delay", "short": "DLY", "models": [
+      "Digital Delay", "Analog Delay", "Echo Delay", "Tape Echo", "Mod Delay", "Reverse Delay", "Ping Pong Delay",
+      "Dynamic Delay", "Dual Delay", "Filter Delay", "Vintage Delay", "Slow-Gear Delay"]},
+    "8": {"name": "Reverb", "short": "REV", "models": [
+      "Room", "Hall", "Church", "Plate", "Spring", "Mod", "Cave", "Reverse", "Shimmer"]}
+  },
+  "translated": {
+    "0": ["Limiter", "Noise Suppressor"],
+    "4": ["Noise Suppressor"],
+    "5": ["3 Band EQ", "Custom EQ"],
+    "6": ["Classic Phaser", "Step Phaser", "Detune", "Analog Chorus", "Band-pass Filter", "High-pass Filter",
+          "Low-pass Filter", "Multi-stage Phaser", "Modern Phaser", "Modern Flanger", "Modern Rotary", "Opto Tremolo"],
+    "8": ["Room", "Hall", "Church", "Plate", "Spring", "Mod", "Cave", "Reverse", "Shimmer"]
+  }
+}

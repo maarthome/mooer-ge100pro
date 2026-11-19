@@ -14,7 +14,9 @@ What it does:
   first instead of saving
 - *Show traffic* shows every message to and from the pedal
 
-Not known yet, so shown as numbers: model names and knob names/ranges.
+Presets are numbered as on the pedal (01A … 50C), models as on the pedal's screen ("01 | 65 US DX", from the manual's
+model lists), and the 20 user amp slots show the names of your captures, read from the pedal. Not known yet, so
+shown as numbers: knob names and ranges.
 
 ## Run it
 
@@ -37,3 +39,4 @@ On Linux (the Pi), Chromium needs the udev rule from `udev/` for access to the p
 |---|---|
 | `index.html` | the editor |
 | `protocol.js` | framing, CRC and message decoding (port of `src/ge100pro`), tested by `tests/test_web_protocol.py` |
+| `models.js` | model names, generated from `src/ge100pro/models.json` by `tools/gen_models_js.py` |
