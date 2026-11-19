@@ -221,6 +221,7 @@ read requests of §3. Each is acknowledged with `request + 1` and payload `01`.
 | `25` | slot index + the full 50-byte slot record | `26 01` | **live edit of one slot**: knob values, on/off, model. Mooer Studio streams one `25` every ≈20 ms while a knob is dragged. Not stored until saved |
 | `41` | page, slot | `42 01` | pedal shows the edit page of that slot; **page = 6 + slot type** (amp 2 → `08`, dyna 4 → `0a`, delay 7 → `0d`; `06` and `0c` seen for types 0 and 6). The pedal echoes it as `43 page slot` |
 | `2f` | preset, 16-byte name | `30 01` | **saves the edit buffer to that preset slot, permanently** (Prime M2: `2f pp name[20]`) |
+| `2d` | id, operation, args | `2e id ok` | **edits the chain** (edit buffer): 1 = add `pos type model`, 2 = change `pos type model`, 3 = delete `pos`, 4 = move `from to` (take the block out, insert it at `to`; the blocks in between shift). From Mooer Studio for GE100 Pro's code (`dragEffectChain`), same as the Prime M2's `2d`; the editor uses *move* only. **Not yet seen in a capture** |
 
 Details [V]:
 - `25` records sent by Mooer Studio carry `1` in parameter 11; the pedal's own records have `0` there [?].

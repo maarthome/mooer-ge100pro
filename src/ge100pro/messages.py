@@ -30,6 +30,7 @@ CMD_SET_STATE = 0x13      # 44-byte state, byte 0 = preset -> 0x14 01: selects a
 CMD_SET_SLOT = 0x25       # slot + 50-byte record          -> 0x26 01: live edit of one slot
 CMD_SAVE = 0x2F           # preset + 16-byte name          -> 0x30 01: STORES the edit buffer
 CMD_OPEN_PAGE = 0x41      # page, slot                     -> 0x42 01: pedal shows that edit page
+CMD_CHAIN = 0x2D          # id, op (1 add, 2 change, 3 delete, 4 move), args -> 0x2e id ok  (from Mooer Studio's code)
 
 # --- pedal -> host --------------------------------------------------------------------------
 DEVICE_INFO = 0x02
@@ -115,10 +116,12 @@ REQUEST_NAMES = {
     CMD_SET_SLOT: "SET_SLOT",
     CMD_SAVE: "SAVE_PRESET",
     CMD_OPEN_PAGE: "OPEN_PAGE",
+    CMD_CHAIN: "CHAIN_EDIT",
 }
 
 #: Pedal acknowledgements (request + 1, payload 01 = ok)
 ACK_NAMES = {0x14: "SET_STATE", 0x26: "SET_SLOT", 0x30: "SAVE_PRESET", 0x42: "OPEN_PAGE"}
+CHAIN_ACK = 0x2E          # id, ok
 STORED_PRESET = 0x22      # reply to 0x21, same layout as 0x32 (right after a select: old slots!)
 LIST = 0x66               # reply to 0x65
 
@@ -269,6 +272,11 @@ def describe_request(r: Request) -> str:
         return "SET_SLOT         " + describe_slot(parse_slot(a[0], a[1 : 1 + SLOT_RECORD_SIZE])) + "  (CHANGES THE PEDAL)"
     if r.command == CMD_SAVE and a:
         return f"SAVE_PRESET      preset {a[0]} name='{_text(a[1:17])}'  (STORES TO THE PEDAL)"
+    if r.command == CMD_CHAIN and len(a) >= 2:
+        op = {1: "add", 2: "change", 3: "delete", 4: "move"}.get(a[1], f"op {a[1]}")
+        if a[1] == 4 and len(a) >= 4:
+            return f"CHAIN_EDIT       id {a[0]} move slot {a[2]} -> {a[3]}  (CHANGES THE PEDAL)"
+        return f"CHAIN_EDIT       id {a[0]} {op} {a[2:].hex(' ')}  (CHANGES THE PEDAL)"
     if r.command == CMD_OPEN_PAGE and len(a) >= 2:
         return f"OPEN_PAGE        page=0x{a[0]:02x} slot={a[1]}"
     if r.command == REQ_PRESET and a:
@@ -308,6 +316,8 @@ def describe(frame: Frame, direction: str = "pedal") -> str:
                 + ", ".join(f"{bank_label(m.first + i)} {n}" for i, n in enumerate(m.names)))
     if isinstance(m, Navigation):
         return f"{prefix}NAV      page=0x{m.page:02x} slot={m.slot}"
+    if frame.command == CHAIN_ACK and len(frame.payload) >= 2:
+        return f"{prefix}ACK      CHAIN_EDIT id {frame.payload[0]} {'ok' if frame.payload[1] == 1 else 'refused'}"
     if frame.command in ACK_NAMES:
         ok = frame.payload == b"\x01"
         return f"{prefix}ACK      {ACK_NAMES[frame.command]} {'ok' if ok else 'payload=' + frame.payload.hex()}"

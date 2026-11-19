@@ -8,8 +8,6 @@
   :root {
     --chassis: #2e3742;   /* powder-coated steel */
     --panel: #38434f;
-    --raised: #44515f;
-    --edge: #556271;
     --silk: #edf0f2;      /* silkscreen print */
     --dim: #9aa6b2;
     --led: #ffb23e;       /* amber LED, "on" and selection */
@@ -18,12 +16,15 @@
     --ok: #6fcf8f;
     --font: "Bahnschrift", "DIN Alternate", "DIN 2014", "Barlow", "Segoe UI", system-ui, sans-serif;
     --r: 6px;
+    --raised: color-mix(in srgb, var(--panel), white 7%);
+    --edge: color-mix(in srgb, var(--panel), white 17%);
   }
   * { box-sizing: border-box; }
+  html { font-size: var(--fs, 15px); }
   html, body { margin: 0; height: 100%; }
   body {
     background: var(--chassis); color: var(--silk); font-family: var(--font);
-    font-size: 15px; line-height: 1.4; display: grid;
+    font-size: 1rem; line-height: 1.4; display: grid;
     grid-template-rows: auto 1fr auto; min-height: 100vh;
   }
   button, input { font: inherit; color: inherit; }
@@ -31,9 +32,9 @@
 
   /* top bar */
   .bar { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--edge); }
-  .mark { font-weight: 700; font-size: 17px; letter-spacing: .02em; font-stretch: condensed; }
+  .mark { font-weight: 700; font-size: 1.133rem; letter-spacing: .02em; font-stretch: condensed; }
   .mark span { color: var(--dim); font-weight: 400; }
-  .conn { display: flex; align-items: center; gap: 8px; color: var(--dim); margin-left: auto; font-size: 14px; }
+  .conn { display: flex; align-items: center; gap: 8px; color: var(--dim); margin-left: auto; font-size: 0.9333rem; }
   .led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 1px 1px rgba(0,0,0,.4); flex: none; }
   .led.on { background: var(--led); box-shadow: 0 0 8px var(--led); }
   .led.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
@@ -61,57 +62,69 @@
   /* main */
   main { padding: 24px 28px 40px; overflow-y: auto; min-width: 0; }
   .screen { display: flex; align-items: baseline; gap: 18px; margin-bottom: 22px; }
-  .pnum { font-size: 60px; line-height: .9; font-weight: 700; color: var(--led); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,178,62,.35); }
-  .pname { font-size: 34px; font-weight: 600; font-stretch: condensed; line-height: 1.05; overflow-wrap: anywhere; }
-  .pstate { color: var(--dim); font-size: 14px; margin-top: 4px; }
+  .pnum { font-size: 4rem; line-height: .9; font-weight: 700; color: var(--led); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,178,62,.35); }
+  .pname { font-size: 2.267rem; font-weight: 600; font-stretch: condensed; line-height: 1.05; overflow-wrap: anywhere; }
+  .pstate { color: var(--dim); font-size: 0.9333rem; margin-top: 4px; }
   .pstate.dirty { color: var(--led); }
 
   /* signal chain */
   .chain { position: relative; display: grid; grid-template-columns: repeat(10, minmax(84px, 1fr)); gap: 10px; margin: 0 0 28px; padding: 6px 0; }
   .chain::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px; background: #1f262e; border-radius: 2px; }
   @media (max-width: 1180px) { .chain { grid-template-columns: repeat(5, 1fr); } .chain::before { display: none; } }
-  .slot { position: relative; min-height: 92px; padding: 10px 10px 8px; border-radius: var(--r); background: var(--raised); border: 1px solid var(--edge); text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
-  .slot:hover { border-color: var(--dim); }
+  .slot { position: relative; min-height: 6.6rem; border-radius: var(--r); background: color-mix(in srgb, var(--raised), var(--g, var(--raised)) 38%); border: 1px solid var(--edge); border-top: 4px solid var(--g, var(--edge)); }
+  .slot:hover { border-color: var(--dim); border-top-color: var(--g, var(--dim)); }
+  .slot .main { all: unset; box-sizing: border-box; position: absolute; inset: 0; padding: 8px 10px 8px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; border-radius: var(--r); }
+  .slot .main:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+  .slot[draggable="true"] .main { cursor: grab; }
+  .slot.dragging { opacity: .45; }
+  .slot.dropbefore::after, .slot.dropafter::after { content: ""; position: absolute; top: -6px; bottom: -6px; width: 4px; border-radius: 2px; background: var(--led); }
+  .slot.dropbefore::after { left: -8px; }
+  .slot.dropafter::after { right: -8px; }
+  .slot .ledbtn { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid transparent; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; z-index: 1; }
+  .slot .ledbtn:hover { border-color: var(--dim); background: rgba(0,0,0,.15); }
   .slot.sel { border-color: var(--led); box-shadow: 0 0 0 1px var(--led); }
-  .slot.vacant { background: var(--chassis); border-style: dashed; cursor: default; color: var(--led-off); }
-  .slot .pos { font-size: 12px; color: var(--dim); padding-right: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: 15px; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-  .slot .snum { font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .slot.vacant .main { cursor: default; }
+  .slot.vacant { background: var(--chassis); border-style: dashed; border-top-width: 1px; color: var(--led-off); }
+  .slot .pos { margin-right: 22px;  font-size: 0.8rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: 1rem; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+  .slot .snum { font-size: 0.8667rem; color: var(--dim); font-variant-numeric: tabular-nums; }
   .slot.off .smodel { color: var(--dim); }
-  .slot .led { position: absolute; top: 10px; right: 10px; }
   .slot .cursor { position: absolute; bottom: -7px; left: 50%; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: var(--led); display: none; }
   .slot.pedalcursor .cursor { display: block; }
 
   /* slot editor */
   .editor { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 18px 20px 22px; }
   .ehead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
-  .ehead h2 { margin: 0; font-size: 22px; font-stretch: condensed; font-weight: 600; }
+  .ehead h2 { margin: 0; font-size: 1.467rem; font-stretch: condensed; font-weight: 600; }
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
   .stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; }
-  .stepper button { background: var(--raised); border: 0; width: 32px; height: 32px; cursor: pointer; font-size: 18px; }
-  .stepper output { min-width: 200px; padding: 0 10px; text-align: center; font-variant-numeric: tabular-nums; }
-  .note { color: var(--dim); font-size: 13px; max-width: 70ch; }
+  .stepper button { background: var(--raised); border: 0; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; }
+  .stepper select { min-width: 220px; height: 32px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 0; border-left: 1px solid var(--edge); border-right: 1px solid var(--edge); font: inherit; }
+  .moves { display: inline-flex; gap: 6px; margin-left: auto; }
+  .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
+  .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
+  .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
   .knobs { display: flex; flex-wrap: wrap; gap: 18px 26px; }
   .knob { width: 104px; display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
   .knob svg { width: 84px; height: 84px; cursor: ns-resize; }
-  .knob .val { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .knob .lbl { font-size: 13px; color: var(--dim); text-align: center; }
+  .knob .val { font-size: 1.267rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .knob .lbl { font-size: 0.8667rem; color: var(--dim); text-align: center; }
   .knob .val { white-space: nowrap; }
   .knob.raw { opacity: .6; }
-  .knob input { width: 80px; text-align: center; background: var(--chassis); border: 1px solid var(--led); border-radius: 4px; font-size: 18px; padding: 2px; }
+  .knob input { width: 80px; text-align: center; background: var(--chassis); border: 1px solid var(--led); border-radius: 4px; font-size: 1.2rem; padding: 2px; }
   .knob:focus-visible { outline: none; }
   .knob:focus-visible svg .cap { stroke: var(--led); stroke-width: 2; }
-  .linkish { background: none; border: 0; color: var(--dim); text-decoration: underline; cursor: pointer; padding: 0; font-size: 13px; }
+  .linkish { background: none; border: 0; color: var(--dim); text-decoration: underline; cursor: pointer; padding: 0; font-size: 0.8667rem; }
 
   /* intro / empty */
   .intro { max-width: 62ch; }
-  .intro h1 { font-size: 34px; font-stretch: condensed; margin: 8px 0 12px; }
+  .intro h1 { font-size: 2.267rem; font-stretch: condensed; margin: 8px 0 12px; }
   .intro ol { padding-left: 1.2em; }
   .intro li { margin: 6px 0; }
   .warn { border-left: 3px solid var(--danger); padding: 8px 12px; background: rgba(239,90,95,.08); }
 
   /* footer */
-  footer { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-top: 1px solid var(--edge); font-size: 13px; color: var(--dim); }
+  footer { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-top: 1px solid var(--edge); font-size: 0.8667rem; color: var(--dim); }
   footer a { color: var(--dim); }
   .spacer { flex: 1; }
   .log { position: fixed; right: 16px; bottom: 56px; width: min(720px, calc(100vw - 32px)); height: 300px; background: #222a33; border: 1px solid var(--edge); border-radius: 8px; overflow: auto; font: 12px/1.45 Consolas, "Cascadia Mono", monospace; padding: 8px 10px; white-space: pre; display: none; }
@@ -121,10 +134,19 @@
   /* dialog + toast */
   dialog { background: var(--panel); color: var(--silk); border: 1px solid var(--edge); border-radius: 10px; padding: 20px 22px; max-width: 440px; }
   dialog::backdrop { background: rgba(10,14,18,.6); }
-  dialog h3 { margin: 0 0 8px; font-size: 20px; }
-  dialog label { display: block; margin: 14px 0 4px; color: var(--dim); font-size: 13px; }
+  dialog h3 { margin: 0 0 8px; font-size: 1.333rem; }
+  dialog label { display: block; margin: 14px 0 4px; color: var(--dim); font-size: 0.8667rem; }
   dialog input { width: 100%; padding: 7px 10px; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); }
   .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .settings-grid { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; margin: 10px 0; }
+  .settings-grid label { margin: 0; color: var(--silk); font-size: 0.9333rem; }
+  .settings-grid input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--edge); border-radius: 4px; background: none; }
+  .settings-grid input[type=range] { width: 160px; accent-color: var(--led); vertical-align: middle; }
+  dialog h4 { margin: 16px 0 4px; font-size: 0.9333rem; color: var(--dim); font-weight: 600; }
+  #settingsDlg, #creditsDlg { max-width: 520px; width: calc(100vw - 32px); max-height: calc(100vh - 40px); }
+  .credits { font-size: 0.9333rem; line-height: 1.5; }
+  .credits ul { padding-left: 1.1em; margin: 6px 0 12px; }
+  .credits a { color: var(--led); }
   .toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--edge); padding: 9px 16px; border-radius: var(--r); opacity: 0; transition: opacity .2s; pointer-events: none; }
   .toast.show { opacity: 1; }
   .toast.err { border-color: var(--danger); }
@@ -136,6 +158,7 @@
   <div class="mark">GE100 Pro <span>editor</span></div>
   <div class="conn"><span class="led" id="connLed"></span><span id="connText">Not connected</span></div>
   <button class="btn primary" id="connectBtn">Connect pedal</button>
+  <button class="btn" id="settingsBtn">Settings</button>
 </header>
 
 <div class="work">
@@ -173,7 +196,7 @@
   <span id="fw"></span>
   <span class="spacer"></span>
   <button class="linkish" id="logBtn" aria-expanded="false">Show traffic</button>
-  <a href="https://github.com/maarthome/mooer-ge100pro/blob/GE100_MOD/CREDITS.md" target="_blank" rel="noopener">Credits</a>
+  <button class="linkish" id="creditsBtn">Credits</button>
   <button class="btn primary" id="saveBtn" disabled>Save</button>
 </footer>
 
@@ -190,6 +213,49 @@
       <button class="btn" value="cancel">Cancel</button>
       <button class="btn danger" value="save" id="saveConfirm">Save</button>
     </div>
+  </form>
+</dialog>
+
+<dialog id="settingsDlg">
+  <form method="dialog">
+    <h3>Settings</h3>
+    <p class="note">Saved in this browser.</p>
+    <div class="settings-grid">
+      <label for="setFs">Text size</label><span><input id="setFs" type="range" min="12" max="22" step="1"> <output id="setFsOut"></output></span>
+    </div>
+    <h4>Colours</h4>
+    <div class="settings-grid" id="setColours"></div>
+    <h4>Effect groups</h4>
+    <div class="settings-grid" id="setGroups"></div>
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="setReset">Reset to defaults</button>
+      <button class="btn primary" value="ok">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="creditsDlg">
+  <form method="dialog" class="credits">
+    <h3>Credits</h3>
+    <p>This unofficial editor stands on other people's work. Thank you.</p>
+    <h4>Code</h4>
+    <ul>
+      <li><a href="https://github.com/fingerskier/Mooer_GE150_Pro_Li-IO" target="_blank" rel="noopener">fingerskier/Mooer_GE150_Pro_Li-IO</a> (Matt Currier, MIT): CRC and message framing</li>
+      <li><a href="https://github.com/atahan26/ge200-editor" target="_blank" rel="noopener">atahan26/ge200-editor</a> (Atahan Şevki Bilginoğlu, MIT): Windows USB access in the Python tools</li>
+    </ul>
+    <h4>Protocol knowledge</h4>
+    <ul>
+      <li><a href="https://github.com/andymann/mooer-prime-m2-app" target="_blank" rel="noopener">andymann/mooer-prime-m2-app</a>: the Prime M2 command family this pedal shares</li>
+      <li><a href="https://github.com/lucanenni/mooer-prime-m2-web" target="_blank" rel="noopener">lucanenni/mooer-prime-m2-web</a>: Prime M2 protocol notes and WebHID editor</li>
+      <li><a href="https://github.com/klaushofrichter/ge150pro-editor" target="_blank" rel="noopener">klaushofrichter/ge150pro-editor</a>: framing write-up, GE150 Pro commands</li>
+      <li><a href="https://github.com/atahan26/ge200-editor" target="_blank" rel="noopener">atahan26/ge200-editor</a> and <a href="https://github.com/ThijsWithaar/MooerManager" target="_blank" rel="noopener">ThijsWithaar/MooerManager</a>: GE200 protocol</li>
+    </ul>
+    <h4>Names and knobs</h4>
+    <ul>
+      <li>Model names from the GE100 Pro firmware; knob names, ranges and value encodings from MOOER Studio for GE100 Pro V1.3.3; preset banks from the GE100 Pro owner's manual.</li>
+    </ul>
+    <p class="note">MOOER, GE100 Pro and MOOER Studio are names of MOOER Audio. This editor is not made, endorsed or supported by MOOER Audio. Full details: CREDITS.md and NOTICE.md in the project.</p>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
   </form>
 </dialog>
 
@@ -211,6 +277,27 @@
 const P = window.GE100;
 const M = window.GE100_MODELS;
 const $ = (id) => document.getElementById(id);
+
+// ---------- settings: text size, colours, effect group colours (saved in this browser) ----------
+const DEFAULT_SETTINGS = {
+  fontSize: 15,
+  colours: { accent: '#ffb23e', background: '#2e3742', panels: '#38434f', text: '#edf0f2' },
+  groups: { 0: '#b0894a', 1: '#c0504d', 2: '#c46a3a', 3: '#8a7a5c', 4: '#8f8f3a', 5: '#3f8fa0', 6: '#5b6fc0', 7: '#3e9a8a', 8: '#8a6fc0' },
+};
+const COLOUR_VARS = { accent: '--led', background: '--chassis', panels: '--panel', text: '--silk' };
+const COLOUR_LABELS = { accent: 'Accent (LEDs, selection)', background: 'Background', panels: 'Panels', text: 'Text' };
+let settings = structuredClone(DEFAULT_SETTINGS);
+try {
+  const saved = JSON.parse(localStorage.getItem('ge100pro.settings') || 'null');
+  if (saved) settings = { ...settings, ...saved, colours: { ...settings.colours, ...saved.colours }, groups: { ...settings.groups, ...saved.groups } };
+} catch (e) { /* storage not available: defaults */ }
+function saveSettings() { try { localStorage.setItem('ge100pro.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
+function applySettings() {
+  const r = document.documentElement.style;
+  r.setProperty('--fs', `${settings.fontSize}px`);
+  for (const [k, v] of Object.entries(COLOUR_VARS)) r.setProperty(v, settings.colours[k]);
+}
+const groupColour = (t) => settings.groups[t] || 'transparent';
 
 /** Preset 1..150 as the pedal shows it: 50 banks of 3, 1 = 01A, 2 = 01B, 3 = 01C, 4 = 02A … */
 const bankLabel = (n) => `${String(Math.ceil(n / 3)).padStart(2, '0')}${'ABC'[(n - 1) % 3]}`;
@@ -502,19 +589,81 @@ function renderChain() {
   if (!app.preset) return;
   c.textContent = '';
   for (const s of app.preset.slots) {
-    const b = document.createElement('button');
-    b.className = 'slot' + (s.used ? '' : ' vacant') + (s.used && !s.enabled ? ' off' : '') + (app.sel === s.index ? ' sel' : '') + (app.pedalCursor === s.index ? ' pedalcursor' : '');
-    b.setAttribute('role', 'listitem');
-    b.innerHTML = `<span class="pos"></span><span class="snum"></span><span class="smodel"></span>${s.used ? `<span class="led${s.enabled ? ' on' : ''}" aria-hidden="true"></span>` : ''}<span class="cursor" aria-hidden="true"></span>`;
-    b.querySelector('.pos').textContent = `${s.index + 1}  ${s.used ? typeName(s.type) : ''}`;
+    const card = document.createElement('div');
+    card.className = 'slot' + (s.used ? '' : ' vacant') + (s.used && !s.enabled ? ' off' : '') + (app.sel === s.index ? ' sel' : '') + (app.pedalCursor === s.index ? ' pedalcursor' : '');
+    card.setAttribute('role', 'listitem');
+    card.dataset.index = s.index;
+    if (s.used) card.style.setProperty('--g', groupColour(s.type));
     const label = s.used ? modelLabel(s.type, s.model) : '';
-    b.querySelector('.snum').textContent = s.used ? label.split(' | ')[0] : '';
-    b.querySelector('.smodel').textContent = s.used ? label.split(' | ').slice(1).join(' | ') : 'Empty';
-    b.title = s.used ? `${typeName(s.type)}: ${label}${s.enabled ? '' : ' (off)'}` : '';
-    b.setAttribute('aria-label', s.used ? `Slot ${s.index + 1}: ${typeName(s.type)}, ${modelLabel(s.type, s.model)}, ${s.enabled ? 'on' : 'off'}` : `Slot ${s.index + 1}: empty`);
-    if (s.used) b.addEventListener('click', () => { app.sel = s.index; renderChain(); renderEditor(); openPage(s); });
-    else b.disabled = true;
-    c.appendChild(b);
+    card.innerHTML = `<button class="main"><span class="pos"></span><span class="snum"></span><span class="smodel"></span></button>${s.used ? `<button class="ledbtn"><span class="led${s.enabled ? ' on' : ''}"></span></button>` : ''}<span class="cursor" aria-hidden="true"></span>`;
+    const main = card.querySelector('.main');
+    card.querySelector('.pos').textContent = `${s.index + 1}  ${s.used ? typeName(s.type) : ''}`;
+    card.querySelector('.snum').textContent = s.used ? label.split(' | ')[0] : '';
+    card.querySelector('.smodel').textContent = s.used ? label.split(' | ').slice(1).join(' | ') : 'Empty';
+    main.title = s.used ? `${typeName(s.type)}: ${label}${s.enabled ? '' : ' (off)'}. Drag to move it in the chain.` : 'Empty: drop a block here';
+    main.setAttribute('aria-label', s.used ? `Slot ${s.index + 1}: ${typeName(s.type)}, ${label}, ${s.enabled ? 'on' : 'off'}` : `Slot ${s.index + 1}: empty`);
+    if (s.used) {
+      main.addEventListener('click', () => { app.sel = s.index; renderChain(); renderEditor(); openPage(s); });
+      const led = card.querySelector('.ledbtn');
+      led.title = s.enabled ? 'Switch off' : 'Switch on';
+      led.setAttribute('aria-label', `${s.enabled ? 'Switch off' : 'Switch on'} ${typeName(s.type)} in slot ${s.index + 1}`);
+      led.setAttribute('aria-pressed', String(s.enabled));
+      led.addEventListener('click', (e) => { e.stopPropagation(); toggleSlot(s); });
+      card.draggable = true;
+      card.addEventListener('dragstart', (e) => {
+        app.dragFrom = s.index;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(s.index));
+      });
+      card.addEventListener('dragend', () => { app.dragFrom = null; renderChain(); });
+    } else {
+      main.tabIndex = -1;
+    }
+    card.addEventListener('dragover', (e) => {
+      if (app.dragFrom === null || app.dragFrom === undefined || app.dragFrom === s.index) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      c.querySelectorAll('.dropbefore,.dropafter').forEach((el) => el.classList.remove('dropbefore', 'dropafter'));
+      card.classList.add(s.index < app.dragFrom ? 'dropbefore' : 'dropafter');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('dropbefore', 'dropafter'));
+    card.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const from = app.dragFrom;
+      app.dragFrom = null;
+      if (from !== null && from !== undefined) moveSlot(from, s.index);
+    });
+    c.appendChild(card);
+  }
+}
+
+function toggleSlot(s) {
+  s.enabled = !s.enabled;
+  pushSlot(s.index);
+  renderChain();
+  if (app.sel === s.index) renderEditor();
+}
+
+/** Move a block to another chain position, as Mooer Studio does: take it out, insert it at the new place
+ *  (the blocks in between shift). Command 0x2d, operation 4 (from Mooer Studio for GE100 Pro). */
+let chainFrame = 0;
+async function moveSlot(from, to) {
+  if (!app.preset || !app.dev || app.busy || from === to) return;
+  const slots = app.preset.slots;
+  const [moved] = slots.splice(from, 1);
+  slots.splice(to, 0, moved);
+  slots.forEach((x, i) => { x.index = i; });
+  app.sel = to;
+  app.dirty = true;
+  renderPreset();
+  chainFrame = (chainFrame + 1) % 256;
+  try {
+    const ack = await request(P.CMD.CHAIN, [chainFrame, 4, from, to], P.REPLY.CHAIN, 1500);
+    if (ack.payload.length >= 2 && ack.payload[1] !== 1) throw new Error('the pedal did not accept the move');
+  } catch (e) {
+    fail(e);
+    await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP).catch(() => {});   // show what the pedal really has
   }
 }
 
@@ -580,10 +729,24 @@ function renderEditor() {
   head.className = 'ehead';
   head.innerHTML = `<h2></h2>
     <button class="switch" aria-pressed="${s.enabled}"><span class="led${s.enabled ? ' on' : ''}"></span>${s.enabled ? 'On' : 'Off'}</button>
-    <span class="stepper" role="group" aria-label="Model"><button aria-label="Previous model">−</button><output></output><button aria-label="Next model">+</button></span>`;
-  head.querySelector('.stepper output').textContent = modelLabel(s.type, s.model);
+    <span class="stepper" role="group" aria-label="Model"><button aria-label="Previous model">−</button><select aria-label="Model"></select><button aria-label="Next model">+</button></span>
+    <span class="moves"><button class="btn" aria-label="Move left in the chain">◀ Move</button><button class="btn" aria-label="Move right in the chain">Move ▶</button></span>`;
+  const sel = head.querySelector('.stepper select');
+  for (let m = 0; m < modelCount(s.type); m++) {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = modelLabel(s.type, m);
+    sel.appendChild(o);
+  }
+  sel.value = String(s.model);
+  sel.addEventListener('change', () => changeModel(s, Number(sel.value) - s.model));
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
-  head.querySelector('.switch').addEventListener('click', () => { s.enabled = !s.enabled; pushSlot(s.index); renderChain(); renderEditor(); });
+  head.style.setProperty('--g', groupColour(s.type));
+  const [mvL, mvR] = head.querySelectorAll('.moves button');
+  mvL.disabled = s.index === 0;
+  mvR.disabled = s.index === app.preset.slots.length - 1;
+  mvL.addEventListener('click', () => moveSlot(s.index, s.index - 1));
+  mvR.addEventListener('click', () => moveSlot(s.index, s.index + 1));
+  head.querySelector('.switch').addEventListener('click', () => toggleSlot(s));
   const [prev, next] = head.querySelectorAll('.stepper button');
   prev.addEventListener('click', () => changeModel(s, -1));
   next.addEventListener('click', () => changeModel(s, +1));
@@ -617,7 +780,22 @@ function changeModel(s, d) {
   renderChain(); renderEditor();
 }
 
+function choice(s, i, k) {
+  const wrap = document.createElement('div');
+  wrap.className = 'knob choice';
+  const sel = document.createElement('select');
+  sel.setAttribute('aria-label', k.name);
+  k.options.forEach((o, n) => { const op = document.createElement('option'); op.value = n; op.textContent = o; sel.appendChild(op); });
+  sel.value = String(s.params[i]);
+  sel.addEventListener('change', () => { s.params[i] = Number(sel.value); pushSlot(s.index); });
+  const lbl = document.createElement('div');
+  lbl.className = 'lbl'; lbl.textContent = k.name;
+  wrap.append(sel, lbl);
+  return wrap;
+}
+
 function knob(s, i, k, raw = false) {
+  if (k.kind === 'sub') return choice(s, i, k);
   const wrap = document.createElement('div');
   wrap.className = 'knob' + (raw ? ' raw' : '');
   wrap.tabIndex = 0;
@@ -704,6 +882,29 @@ function fail(e) {
   toast(e && e.message ? e.message.charAt(0).toUpperCase() + e.message.slice(1) : 'Something went wrong talking to the pedal', true);
 }
 
+function openSettings() {
+  const dlg = $('settingsDlg');
+  const fs = $('setFs');
+  fs.value = settings.fontSize; $('setFsOut').textContent = `${settings.fontSize} px`;
+  fs.oninput = () => { settings.fontSize = Number(fs.value); $('setFsOut').textContent = `${fs.value} px`; applySettings(); saveSettings(); };
+  const mk = (box, label, value, onInput) => {
+    const id = 'c' + Math.random().toString(36).slice(2, 8);
+    const l = document.createElement('label'); l.htmlFor = id; l.textContent = label;
+    const i = document.createElement('input'); i.type = 'color'; i.id = id; i.value = value;
+    i.addEventListener('input', () => { onInput(i.value); saveSettings(); });
+    box.append(l, i);
+  };
+  const cbox = $('setColours'); cbox.textContent = '';
+  for (const k of Object.keys(COLOUR_VARS)) mk(cbox, COLOUR_LABELS[k], settings.colours[k], (v) => { settings.colours[k] = v; applySettings(); });
+  const gbox = $('setGroups'); gbox.textContent = '';
+  for (const t of Object.keys(M.types)) mk(gbox, typeName(t), settings.groups[t], (v) => { settings.groups[t] = v; renderChain(); renderEditor(); });
+  $('setReset').onclick = () => { settings = structuredClone(DEFAULT_SETTINGS); applySettings(); saveSettings(); renderChain(); renderEditor(); openSettings(); };
+  if (!dlg.open) dlg.showModal();
+}
+
+applySettings();
+$('settingsBtn').addEventListener('click', openSettings);
+$('creditsBtn').addEventListener('click', () => $('creditsDlg').showModal());
 $('connectBtn').addEventListener('click', connect);
 $('saveBtn').addEventListener('click', save);
 $('search').addEventListener('input', renderList);
