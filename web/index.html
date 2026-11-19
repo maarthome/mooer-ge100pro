@@ -95,10 +95,8 @@
   .ehead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
   .ehead h2 { margin: 0; font-size: var(--fs-heading, 22px); font-stretch: condensed; font-weight: 600; }
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
-  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; }
-  .stepper button { background: var(--raised); border: 0; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; }
-  .stepper select { min-width: 220px; height: 32px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 0; border-left: 1px solid var(--edge); border-right: 1px solid var(--edge); font: inherit; }
-  .moves { display: inline-flex; gap: 6px; margin-left: auto; }
+  select.model { min-width: 240px; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
+  select.model option, .knob.choice select option { background: var(--panel); color: var(--silk); }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
   .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
@@ -264,11 +262,12 @@
 
 <dialog id="discardDlg">
   <form method="dialog">
-    <h3>Discard your changes?</h3>
+    <h3>Save your changes?</h3>
     <p class="note" id="discardText"></p>
     <div class="dlg-actions">
-      <button class="btn" value="cancel">Keep editing</button>
-      <button class="btn danger" value="discard">Discard changes</button>
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn" value="discard">Don't save</button>
+      <button class="btn primary" value="save">Save…</button>
     </div>
   </form>
 </dialog>
@@ -400,7 +399,7 @@ function handle(f) {
     if (f.cmd === R.STATUS && app.preset && p[0] !== app.preset.preset && !app.busy) {
       // preset changed on the pedal: it usually pushes 0x32 by itself, but not always, so ask if it doesn't
       clearTimeout(app.followTimer);
-      app.followTimer = setTimeout(() => send(P.CMD.CURRENT_PRESET), 500);
+      app.followTimer = setTimeout(() => { app.loading = true; send(P.CMD.CURRENT_PRESET); }, 500);
     }
   } else if (f.cmd === R.LIST) {
     for (const e of P.parseList(p)) {
@@ -409,8 +408,11 @@ function handle(f) {
     renderPreset();
   } else if (f.cmd === R.PRESET_DUMP) {
     clearTimeout(app.followTimer);
+    // a newly loaded preset starts unchanged; the same preset sent again (e.g. after a move) keeps its changes
+    const fresh = app.loading || !app.preset || p[0] !== app.preset.preset;
+    app.loading = false;
     app.preset = P.parsePreset(p);
-    app.dirty = false;
+    if (fresh) app.dirty = false;
     app.toSend.clear();
     app.quietUntil.clear();
     if (app.sel !== null && !app.preset.slots[app.sel].used) app.sel = null;
@@ -450,6 +452,7 @@ async function connect() {
     // names of the user capture/IR slots: drive (1), amp (2), cab (3). Mooer Studio asks for type 2;
     // types 1 and 3 answer the same request on this pedal (tested with python -m ge100pro.lists).
     for (const t of [0x01, 0x02, 0x03]) await request(P.CMD.LIST, [t, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
+    app.loading = true;
     await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
     $('intro').hidden = true;
     $('preset').hidden = false;
@@ -479,8 +482,13 @@ function disconnected() {
 // ---------- editor -> pedal ------------------------------------------------------------
 async function selectPreset(n) {
   if (app.busy || !app.dev || (app.preset && n === app.preset.preset && !app.dirty)) return;
-  if (app.dirty && !(await askDiscard())) return;
+  if (app.dirty) {
+    const answer = await askUnsaved();
+    if (answer === 'cancel') return;
+    if (answer === 'save' && !(await save())) return;
+  }
   app.busy = true;
+  app.loading = true;
   renderList();
   try {
     const st = (await request(P.CMD.STATE, [], P.REPLY.STATE)).payload;
@@ -491,9 +499,11 @@ async function selectPreset(n) {
     if (ack.payload[0] !== 1) throw new Error('the pedal refused the preset change');
     await dump.catch(async () => {           // pedal did not push the new preset: ask for it
       await new Promise((r) => setTimeout(r, 300));
+      app.loading = true;
       await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
     });
   } catch (e) { fail(e); }
+  app.loading = false;
   app.busy = false;
   renderList();
 }
@@ -521,7 +531,7 @@ function openPage(slot) {
 }
 
 async function save() {
-  if (!app.preset || !app.dev) return;
+  if (!app.preset || !app.dev) return false;
   const n = app.preset.preset;
   $('saveTitle').textContent = `Save to preset ${bankLabel(n)}`;
   $('saveText').textContent = `This permanently replaces what is stored in preset ${bankLabel(n)} ("${app.names[n] || app.preset.name}") with the sound you hear now.`;
@@ -529,7 +539,7 @@ async function save() {
   const dlg = $('saveDlg');
   dlg.showModal();
   const result = await new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue), { once: true }));
-  if (result !== 'save') return;
+  if (result !== 'save') return false;
   const name = $('saveName').value.trim() || app.preset.name;
   try {
     const ack = await request(P.CMD.SAVE, [n, ...P.nameField(name)], P.REPLY.SAVE, 3000);
@@ -539,14 +549,17 @@ async function save() {
     app.dirty = false;
     renderPreset(); renderList();
     toast(`Saved preset ${bankLabel(n)}`);
-  } catch (e) { fail(e); }
+    return true;
+  } catch (e) { fail(e); return false; }
 }
 
-function askDiscard() {
+/** Unsaved changes when switching presets: 'save', 'discard' or 'cancel'. */
+function askUnsaved() {
   const dlg = $('discardDlg');
-  $('discardText').textContent = `Preset ${bankLabel(app.preset.preset)} has changes that are not saved. Switching presets discards them.`;
+  $('discardText').textContent = `Preset ${bankLabel(app.preset.preset)} "${app.preset.name}" has changes that are not saved. Save them before switching?`;
+  dlg.returnValue = 'cancel';
   dlg.showModal();
-  return new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue === 'discard'), { once: true }));
+  return new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue || 'cancel'), { once: true }));
 }
 
 // ---------- rendering --------------------------------------------------------------------
@@ -740,27 +753,18 @@ function renderEditor() {
   head.className = 'ehead';
   head.innerHTML = `<h2></h2>
     <button class="switch" aria-pressed="${s.enabled}"><span class="led${s.enabled ? ' on' : ''}"></span>${s.enabled ? 'On' : 'Off'}</button>
-    <span class="stepper" role="group" aria-label="Model"><button aria-label="Previous model">−</button><select aria-label="Model"></select><button aria-label="Next model">+</button></span>
-    <span class="moves"><button class="btn" aria-label="Move left in the chain">◀ Move</button><button class="btn" aria-label="Move right in the chain">Move ▶</button></span>`;
-  const sel = head.querySelector('.stepper select');
+    <select class="model" aria-label="Model"></select>`;
+  const sel = head.querySelector('select.model');
   for (let m = 0; m < modelCount(s.type); m++) {
     const o = document.createElement('option');
     o.value = m; o.textContent = modelLabel(s.type, m);
     sel.appendChild(o);
   }
   sel.value = String(s.model);
-  sel.addEventListener('change', () => changeModel(s, Number(sel.value) - s.model));
+  sel.addEventListener('change', () => setModel(s, Number(sel.value)));
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
   head.style.setProperty('--g', groupColour(s.type));
-  const [mvL, mvR] = head.querySelectorAll('.moves button');
-  mvL.disabled = s.index === 0;
-  mvR.disabled = s.index === app.preset.slots.length - 1;
-  mvL.addEventListener('click', () => moveSlot(s.index, s.index - 1));
-  mvR.addEventListener('click', () => moveSlot(s.index, s.index + 1));
   head.querySelector('.switch').addEventListener('click', () => toggleSlot(s));
-  const [prev, next] = head.querySelectorAll('.stepper button');
-  prev.addEventListener('click', () => changeModel(s, -1));
-  next.addEventListener('click', () => changeModel(s, +1));
   ed.appendChild(head);
 
   const spec = knobsFor(s.type, s.model);
@@ -783,9 +787,8 @@ function renderEditor() {
   ed.appendChild(foot);
 }
 
-function changeModel(s, d) {
-  const m = s.model + d;
-  if (m < 0 || m >= modelCount(s.type)) return;
+function setModel(s, m) {
+  if (m < 0 || m >= modelCount(s.type) || m === s.model) return;
   s.model = m;
   pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
   renderChain(); renderEditor();
