@@ -102,7 +102,7 @@ def model_label(slot_type: int, model: int, text: str = "") -> str:
     info = MODELS.get(str(slot_type), {"models": []})
     names = info["models"]
     if model == USER_MODEL and info.get("user_slots"):
-        return f"U | {text or '?'}"
+        return f"{len(names) + info['user_slots'] + 1:02d} | {text or '?'}"
     if model < len(names):
         return f"{model + 1:02d} | {names[model]}"
     if model - len(names) < info.get("user_slots", 0):

@@ -390,7 +390,8 @@ function modelLabel(type, model, text) {
     const name = info.user_list !== undefined && app.userNames[info.user_list] && app.userNames[info.user_list][u];
     return `${n} | ${name || `User ${u} (empty)`}`;
   }
-  if (model === USER_MODEL && text) return `U | ${text}`;
+  // the capture stored in the preset itself: Mooer Studio lists it after the user slots (amp: 93)
+  if (model === USER_MODEL && text) return `${String(info.models.length + (info.user_slots || 0) + 1).padStart(2, '0')} | ${text}`;
   return `${n} | Model ${model}`;
 }
 

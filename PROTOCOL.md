@@ -212,7 +212,10 @@ of a slot record holds the name of the capture in use or `MEMORY`.
 
 **A user capture / IR in a slot is model 120 (0x78) with its name in the text field**, not "factory count + slot"
 [V, capture1: amp `120 "Clean_9b5eltcb"`, cab `120 "1971 Fender Twin R"`]. Word 11 is `0x0001` for a user amp and
-`0x0101` for a user IR there. The "73–92" numbers in the manual are only display numbers. Sending a `25` with model
+`0x0101` for a user IR there. Mooer Studio shows model 120 **after** the user slots, as the preset's own capture
+(amp: "93. Conv_100_netMesaBo" below "73.–92. EMPTY", 2026-11-19), so 120 + name is a capture stored in the preset; how
+Mooer Studio selects a filled user slot (120 + name, or 72–91) is still to be captured. The "73–92" numbers in the
+manual are display numbers. Sending a `25` with model
 72–91 (the list position) made the pedal show Chinese characters or another type's model name ("01: 3 BANDS EQ") and
 drop off USB until it was switched off and on (2026-11-19). Mooer Studio also sends the new model's default
 knob values with a model change; the editor keeps the old values and takes the pedal's `27` answer.
