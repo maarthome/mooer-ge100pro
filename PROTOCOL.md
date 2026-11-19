@@ -143,9 +143,9 @@ category's list: model 0 is shown on the pedal as `01`. All names and knobs are 
 | Type | Category | Models | Knobs (examples) |
 |---|---|---|---|
 | 0 | Pre FX (wah, compressors, limiter, reducer) | 15 | CRY WAH: Q, Position, Peak, Level |
-| 1 | Drive | 35 + 10 user captures (shown as 36–45; on the wire model 120 + name) | Volume, Tone, Gain |
-| 2 | Amp | 72 + 20 user captures (shown as 73–92; on the wire model 120 + name) | GAIN, BASS, MID, TREBLE, PRES, MST |
-| 3 | Cab | 67 + 20 user IRs (shown as 68–87; on the wire model 120 + name) | LOW CUT, HIGH CUT, ROOM |
+| 1 | Drive | 35 + 10 user captures (shown as 36–45; on the wire 100 + slot − 1 [H]) | Volume, Tone, Gain |
+| 2 | Amp | 72 + 20 user captures (shown as 73–92; on the wire 100 + slot − 1) | GAIN, BASS, MID, TREBLE, PRES, MST |
+| 3 | Cab | 67 + 20 user IRs (shown as 68–87; on the wire 100 + slot − 1 [H]) | LOW CUT, HIGH CUT, ROOM |
 | 4 | Noise reduction | 3 | NOISE KILLER: THRES; INTEL REDUCER: SENS; NOISE GATE: ATTACK, RELEASE, THRES |
 | 5 | EQ | 6 | MOOER HM: 80Hz, 240Hz, 750Hz, 2.2KHz, 6.6KHz; CUSTOM EQ: Gain/Freq × 3 |
 | 6 | Modulation | 27 | PHASER: Rate, Level, Depth; PITCH SHIFT: Pitch, Mix, Tone |
