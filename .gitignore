@@ -5,3 +5,6 @@ __pycache__/
 .venv/
 build/
 dist/
+
+# Raw USBPcap captures contain every USB device (keyboard!): filter before committing
+captures/raw/

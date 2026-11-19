@@ -1,23 +1,26 @@
 """Linux hidraw transport for the GE100 Pro (34db:0011, HID interface 3).
 
-Reading is safe: the pedal pushes its changes without any handshake.
-Writing is disabled until a host command is confirmed from a Mooer Studio
-capture -- other Mooer models have commands that erase memory, and the same
-opcode can mean something else on this pedal.
+The pedal pushes its changes without any handshake. Sending is limited to the
+read requests Mooer Studio itself sends to this pedal (captured on the wire,
+tests/fixtures/01_connect_ge100pro.pcapng); everything else is refused, because
+other Mooer models have commands that erase memory and the same opcode can mean
+something else on this pedal.
 """
 
 from __future__ import annotations
 
 import glob
 import os
+import select
 
 from .framing import HID_REPORT_SIZE, Deframer, Frame, build_reports
 
 VENDOR_ID = 0x34DB
 PRODUCT_ID = 0x0011
 
-#: Host -> pedal commands confirmed safe on the GE100 Pro. Empty on purpose.
-CONFIRMED_HOST_COMMANDS: set[int] = set()
+#: Host -> pedal commands confirmed on the GE100 Pro: only the read requests Mooer Studio
+#: sends during its connect sequence. No command that changes the pedal is listed yet.
+CONFIRMED_HOST_COMMANDS: set[int] = {0x01, 0x11, 0x29, 0x2B, 0x31}
 
 
 def find_hidraw(vendor_id: int = VENDOR_ID, product_id: int = PRODUCT_ID) -> str | None:
@@ -61,6 +64,13 @@ class GE100Pro:
             report = os.read(self._fd, HID_REPORT_SIZE)
             yield from self._deframer.feed(report)
 
+    def read_frames(self, timeout: float = 0.5) -> list[Frame]:
+        """Read whatever arrives until `timeout` seconds pass without a new report."""
+        frames: list[Frame] = []
+        while select.select([self._fd], [], [], timeout)[0]:
+            frames.extend(self._deframer.feed(os.read(self._fd, HID_REPORT_SIZE)))
+        return frames
+
     def send(self, command: int, payload: bytes = b"") -> None:
         """Send one command. Refuses anything not confirmed for this pedal."""
         if command not in CONFIRMED_HOST_COMMANDS:
@@ -71,3 +81,26 @@ class GE100Pro:
         for report in build_reports(command, payload):
             # hidraw, unnumbered reports: leading 0x00 report ID + 64-byte report
             os.write(self._fd, b"\x00" + report)
+
+    # --- read requests, exactly as Mooer Studio sends them --------------------------------
+    def request_device_info(self) -> None:
+        """-> 0x02: name, firmware version."""
+        self.send(0x01, b"\x00")
+
+    def request_state(self) -> None:
+        """-> 0x12 (current preset, global state), followed by 0x49."""
+        self.send(0x11)
+
+    def request_names(self, first: int, last: int) -> None:
+        """-> 0x2a: preset names first..last (1..150; Mooer Studio asks 30 at a time)."""
+        if not (1 <= first <= last <= 150 and last - first < 30):
+            raise ValueError("first..last must lie within 1..150 and span at most 30 presets")
+        self.send(0x29, bytes([first, last]))
+
+    def request_availability(self) -> None:
+        """-> 0x2c (299 bytes, meaning unknown)."""
+        self.send(0x2B)
+
+    def request_current_preset(self) -> None:
+        """-> 0x32: the current preset with its 10 chain slots, followed by 0x43."""
+        self.send(0x31)

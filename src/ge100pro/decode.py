@@ -1,8 +1,9 @@
-"""Decode GE100 Pro traffic, live from hidraw or from a saved xxd dump.
+"""Decode GE100 Pro traffic, live from hidraw, from an xxd dump or from a filtered Wireshark capture.
 
-  ge100pro-decode                       # live, auto-detects /dev/hidrawN
-  ge100pro-decode /dev/hidraw0          # live, given node
-  ge100pro-decode capture.txt           # an `xxd -c 64` dump of /dev/hidraw0
+  python3 -m ge100pro                         # live, auto-detects /dev/hidrawN
+  python3 -m ge100pro /dev/hidraw0            # live, given node
+  python3 -m ge100pro capture.txt             # an `xxd -c 64` dump of /dev/hidrawN (pedal -> host only)
+  python3 -m ge100pro capture.pcapng          # USBPcap capture: both directions, with timestamps
 """
 
 from __future__ import annotations
@@ -31,11 +32,26 @@ def frames_from_xxd(path: str):
         yield from d.feed(report)
 
 
+def frames_from_pcapng(path: str):
+    """Yield (time_ms, direction, frame) from a USBPcap capture; direction is 'host' or 'pedal'."""
+    from .pcapng import pedal_reports
+
+    deframers = {"host": Deframer(), "pedal": Deframer()}
+    t0 = None
+    for time_us, direction, report in pedal_reports(path):
+        t0 = time_us if t0 is None else t0
+        for frame in deframers[direction].feed(report):
+            yield (time_us - t0) / 1000, direction, frame
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
     src = args[0] if args else None
     try:
-        if src and not src.startswith("/dev/"):
+        if src and src.endswith(".pcapng"):
+            for ms, direction, frame in frames_from_pcapng(src):
+                print(f"{ms:9.1f}  {describe(frame, direction)}", flush=True)
+        elif src and not src.startswith("/dev/"):
             for frame in frames_from_xxd(src):
                 print(describe(frame), flush=True)
         else:
@@ -48,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         pass
     except BrokenPipeError:
         pass
-    except (FileNotFoundError, PermissionError) as e:
+    except (FileNotFoundError, PermissionError, LookupError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0
