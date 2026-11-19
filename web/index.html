@@ -1180,9 +1180,6 @@ function buildModelPicker(box, s) {
       if (!ok) return;
       close();
       if (m === cur) return;
-      if (/ \| EMPTY$/.test(label) && !window.confirm(
-        `${label.split(' | ')[0]} is an EMPTY user slot. Choosing an empty slot has not been tried on the pedal yet: ` +
-        'it may stay silent, or lock up until you switch it off and on.\n\nDon\'t save the preset before you know it works. Choose it anyway?')) return;
       setModel(s, m);
     });
     if (m >= info.models.length && m < modelCount(s.type)) {   // a user slot: + (load / replace) and − (delete)
