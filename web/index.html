@@ -89,6 +89,9 @@
   .bin svg { width: 44px; height: 44px; fill: currentColor; }
   .bin.armed { opacity: 1; border-color: var(--dim); }
   .bin.over { opacity: 1; border-style: solid; border-color: #e5534b; color: #e5534b; background: color-mix(in srgb, #e5534b 14%, transparent); }
+  #gnrDlg input[type=file], #gnrDlg input[type=text] { display: block; width: 100%; min-width: 360px; margin: 4px 0 12px; font: inherit; }
+  #gnrDlg input[type=text] { height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); }
+  #gnrDlg code { font-size: .9em; }
   #addDlg select { width: 100%; min-width: 320px; height: 34px; margin-bottom: 10px; }
   .slot.vacant { background: var(--chassis); border-style: dashed; border-top-width: 1px; color: var(--led-off); }
   .slot .pos { margin-right: 22px; font-size: var(--fs-group, 12px); line-height: 1.3; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -281,6 +284,23 @@
     </ul>
     <p class="note">MOOER, GE100 Pro and MOOER Studio are names of MOOER Audio. This editor is not made, endorsed or supported by MOOER Audio. Full details: CREDITS.md and NOTICE.md in the project.</p>
     <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="gnrDlg">
+  <form method="dialog">
+    <h3 id="gnrTitle">Load a capture</h3>
+    <p class="note">Only <b>.gnr</b> files can be loaded. Convert .nam files first with
+      <code>tools\nam_to_gnr.py</code>, which runs Mooer's own converter.</p>
+    <label for="gnrFile">.gnr file</label>
+    <input type="file" id="gnrFile" accept=".gnr">
+    <label for="gnrName">Name on the pedal (at most 18 characters)</label>
+    <input type="text" id="gnrName" maxlength="18" spellcheck="false" autocomplete="off">
+    <p class="note" id="gnrInfo"></p>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" value="load" id="gnrLoad" disabled>Load</button>
+    </div>
   </form>
 </dialog>
 
@@ -862,6 +882,80 @@ async function deleteCapture(list, u, name) {
   renderPreset();
 }
 
+/** A .gnr file (made by Mooer's nam_to_gnr_cli): "mooerge\0" + size, then chunks [id 4][length u32 LE][bytes].
+ *  The pedal gets the "data" chunk only (capture 08: 10 240 bytes, identical). */
+function parseGnr(buf) {
+  const b = new Uint8Array(buf), dv = new DataView(buf);
+  const tag = (o, n) => String.fromCharCode(...b.subarray(o, o + n));
+  if (b.length < 16 || tag(0, 7) !== 'mooerge') throw new Error('not a .gnr file (it must start with "mooerge")');
+  for (let o = 12; o + 8 <= b.length;) {
+    const id = tag(o, 4), len = dv.getUint32(o + 4, true);
+    if (id === 'data') {
+      if (o + 8 + len > b.length || len === 0) throw new Error('the .gnr file is cut off');
+      return b.slice(o + 8, o + 8 + len);
+    }
+    o += 8 + len;
+  }
+  throw new Error('no data in the .gnr file');
+}
+
+/** Ask for a .gnr file and a name, then load it into an empty user slot. */
+function pickGnr(list, u) {
+  if (!app.dev || app.busy) return;
+  const dlg = $('gnrDlg'), file = $('gnrFile'), name = $('gnrName'), info = $('gnrInfo'), load = $('gnrLoad');
+  $('gnrTitle').textContent = `Load a capture into user slot ${u}`;
+  file.value = ''; name.value = ''; info.textContent = ''; load.disabled = true;
+  let data = null;
+  file.onchange = async () => {
+    data = null; load.disabled = true; info.textContent = '';
+    const f = file.files[0];
+    if (!f) return;
+    try {
+      if (!/\.gnr$/i.test(f.name)) throw new Error('only .gnr files can be loaded');
+      data = parseGnr(await f.arrayBuffer());
+      if (!name.value) name.value = f.name.replace(/\.gnr$/i, '').slice(0, 18);
+      info.textContent = `${data.length} bytes of capture data`;
+      load.disabled = !name.value.trim();
+    } catch (e) { info.textContent = 'Can\'t use this file: ' + e.message; }
+  };
+  name.oninput = () => { load.disabled = !data || !name.value.trim(); };
+  dlg.onclose = () => { if (dlg.returnValue === 'load' && data) uploadCapture(list, u, name.value.trim(), data); };
+  dlg.returnValue = '';
+  dlg.showModal();
+}
+
+/** Load capture data into user slot u, as Mooer Studio does (capture 07 / 08):
+ *  0x61 [list, slot u16, parts, index, length u16, bytes] for each part, answered by 0x62 [list, slot u16, index].
+ *  Part 0 is the name, parts 1.. carry 512 bytes each. The pedal then pushes the new entry as 0x69. */
+async function uploadCapture(list, u, name, data) {
+  if (!app.dev || app.busy) return;
+  const chunks = [];
+  for (let o = 0; o < data.length; o += 512) chunks.push(data.subarray(o, o + 512));
+  const parts = chunks.length + 1;
+  if (parts > 255) { fail(new Error('the capture is too large')); return; }
+  const nameBytes = Array.from(name.slice(0, 18), (c) => c.charCodeAt(0) & 0x7f);
+  app.busy = true;
+  try {
+    const part = async (index, bytes) => {
+      const ack = (await request(P.CMD.USER_UPLOAD, [list, u & 0xff, u >> 8, parts, index, bytes.length & 0xff, bytes.length >> 8, ...bytes], P.REPLY.USER_UPLOAD, 3000)).payload;
+      if (ack[3] !== index) throw new Error(`the pedal did not take part ${index} of the capture`);
+    };
+    await part(0, nameBytes);
+    for (let i = 0; i < chunks.length; i++) {
+      toast(`Loading "${name}"… ${Math.round(((i + 1) / chunks.length) * 100)}%`);
+      await part(i + 1, chunks[i]);
+    }
+    await sleep(300);   // the pedal stores it and pushes 0x69
+    await request(P.CMD.LIST, [list, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
+    toast(`Loaded "${name}" into user slot ${u}`);
+  } catch (e) {
+    fail(e);
+    await request(P.CMD.LIST, [list, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
+  }
+  app.busy = false;
+  renderPreset();
+}
+
 /** Ask which block to put in an empty slot. */
 function pickBlock(index) {
   if (!app.preset || !app.dev || app.busy) return;
@@ -1005,7 +1099,7 @@ function knobParse(k, text) {
  *  capture into an empty slot) and − (delete it), like Mooer Studio; those and choosing a user slot wait for a
  *  Mooer Studio capture of the commands, because guessing them locked the pedal up. */
 const PM_HINT = 'Deleting drive captures and cab IRs is not possible yet: only seen for amp captures';
-const PM_ADD_HINT = 'Loading a capture is not possible yet: Mooer Studio converts the .nam file first, and that conversion is still unknown';
+const PM_ADD_HINT = 'Loading drive captures and cab IRs is not possible yet: only seen for amp captures';
 const USER_HINT = 'Empty, or (drive / cab) not used on the pedal yet: choose it once on the pedal itself';
 function buildModelPicker(box, s) {
   const btn = box.querySelector('button.model'), list = box.querySelector('.mlist');
@@ -1041,6 +1135,11 @@ function buildModelPicker(box, s) {
         pm.title = `Delete this capture from the pedal (user slot ${u})`;
         pm.classList.add('live');
         pm.addEventListener('click', (e) => { e.stopPropagation(); close(); deleteCapture(info.user_list, u, label.split(' | ').slice(1).join(' | ')); });
+      } else if (empty && info.user_list === 2) {
+        pm.title = `Load a .gnr capture into user slot ${u}`;
+        pm.classList.add('live');
+        pm.removeAttribute('aria-disabled');
+        pm.addEventListener('click', (e) => { e.stopPropagation(); close(); pickGnr(info.user_list, u); });
       } else {
         pm.title = empty ? PM_ADD_HINT : PM_HINT;
         pm.setAttribute('aria-disabled', 'true');

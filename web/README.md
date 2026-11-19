@@ -13,6 +13,7 @@ What it does:
 - remove a block: drag its card onto the bin above the chain, on the right
 - connects by itself when exactly one GE100 Pro is plugged in and allowed (the browser asks once, the first time;
   with several pedals it shows its chooser)
+- user amp captures: **+** on an EMPTY slot loads a .gnr file (make them with `tools/nam_to_gnr.py`), **−** deletes one
 - per slot: click the model, then point and click another one in the list (user capture / IR slots are not offered yet: the right
   command is still unknown; the preset's own capture shows as e.g. 93 | name, like Mooer Studio), turn the knobs (drag up/down, mouse wheel, arrow keys,
   double-click or Enter to type a value; hold Shift for fine steps); delay sub-divisions are drop-downs

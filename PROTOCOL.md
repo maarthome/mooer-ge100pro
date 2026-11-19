@@ -296,7 +296,10 @@ python3 -m ge100pro captures/OUT.pcapng
 | `67` host → `68` | `list, slot u16, 01, name` (no length, no padding) → `list, slot u16, 01` | delete the capture in that user slot, e.g. `02 03 00 01 "Mesa_Studio22_Cln_"`. [V] |
 
 Mooer Studio asks `65` for the list again after both. The 10 240 bytes are not the .nam file itself: Mooer Studio
-converts it first (how is not known yet). List 2 (amps) only so far; drives (3) and cabs (1) assumed the same.
+runs its own converter `resources\nam\nam_to_gnr_cli.exe --input <file.nam> --output <file.gnr>` and sends the
+`data` chunk of the .gnr file unchanged [V, capture 08 = the .gnr made from the same .nam]. A .gnr file is
+`"mooerge\0"` + u32 size, then chunks `[id 4][length u32 LE][bytes]`: `info` (56 bytes, a zero UUID), `data`
+(10 240 bytes). The name in part 0 may be longer; the pedal keeps 18 characters. List 2 (amps) only so far; drives (3) and cabs (1) assumed the same.
 
 Capture names are at most 18 characters. Mooer Studio names a loaded capture `<file name>_<8 random characters>` and cuts
 that to 18: "Mesa_Cln" → "Mesa_Cln_l0yr7jfz", "Mesa_Studio22_Clean" → "Mesa_Studio22_Clea" (suffix cut off entirely).
