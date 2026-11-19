@@ -107,7 +107,7 @@
   .mpick { position: relative; }
   button.model { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 312px; max-width: calc(100vw - 40px); height: 34px; padding: 0 10px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; cursor: pointer; text-align: left; }
   button.model .mcur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mlist { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; min-width: 312px; max-width: calc(100vw - 40px); max-height: 60vh; overflow-y: auto; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .mlist { position: fixed; z-index: 1000; min-width: 312px; max-width: calc(100vw - 16px); overflow-y: auto; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
   .mrow { display: flex; align-items: center; border-radius: 4px; }
   .mrow .mname { flex: 1; text-align: left; background: none; border: 0; color: var(--silk); font: inherit; padding: 6px 10px; cursor: pointer; white-space: nowrap; border-radius: 4px; }
   .mrow:hover, .mrow:focus-within { background: color-mix(in srgb, var(--led) 18%, transparent); }
@@ -353,12 +353,30 @@ const typeName = (t) => typeInfo(t).name;
 const modelCount = (t) => typeInfo(t).models.length + (typeInfo(t).user_slots || 0);
 /** False for a user capture / IR slot that holds nothing (or whose name the pedal has not sent yet):
  *  choosing one makes the pedal show a garbage name and drop off USB. */
+/** Records the pedal itself sent for a user capture / IR (model 120 + name), kept per type and name.
+ *  Choosing that user slot in the editor sends back exactly the pedal's own record, never a guess. */
+const learned = (() => { try { return JSON.parse(localStorage.getItem('ge100pro.captures') || '{}'); } catch (e) { return {}; } })();
+function learnCapture(s) {
+  if (!s.used || s.model !== USER_MODEL || !s.text || s.type < 1 || s.type > 3) return;
+  const key = `${s.type}:${s.text}`, hex = Array.from(s.raw, (b) => b.toString(16).padStart(2, '0')).join('');
+  if (learned[key] === hex) return;
+  learned[key] = hex;
+  try { localStorage.setItem('ge100pro.captures', JSON.stringify(learned)); } catch (e) { /* private mode */ }
+}
+function learnedRecord(type, model) {
+  const info = typeInfo(type);
+  const names = info.user_list !== undefined && app.userNames[info.user_list];
+  const name = names && names[model - info.models.length + 1];
+  const hex = name && learned[`${type}:${name.slice(0, 20)}`];
+  return hex ? Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16)) : null;
+}
+
 function modelSelectable(type, model) {
   const info = typeInfo(type);
   if (model < info.models.length) return true;
   // User slots stay off until a Mooer Studio capture shows how it selects one: the list position (72-91)
   // locked the pedal up, and 120 + name only renames the preset's own capture (pedal shows "93:<name>").
-  if (!USER_SLOTS_SELECTABLE) return false;
+  if (!USER_SLOTS_SELECTABLE) return Boolean(model < modelCount(type) && learnedRecord(type, model));
   const u = model - info.models.length + 1;
   const names = info.user_list !== undefined && app.userNames[info.user_list];
   return Boolean(info.user_slots && u <= info.user_slots && names && names[u]);
@@ -378,7 +396,16 @@ function slotText(type, model) {
 const USER_MODEL = 120;
 const USER_SLOTS_SELECTABLE = false;
 function uiModel(s) {
-  if (!USER_SLOTS_SELECTABLE) return s.model;   // show 120 as Mooer Studio does: "93 | <name>"
+  if (!USER_SLOTS_SELECTABLE) {
+    const info = typeInfo(s.type);
+    if (s.model === USER_MODEL && info.user_slots) {   // a learned user slot: show it as 73-92, else as 93
+      for (let m = info.models.length; m < modelCount(s.type); m++) {
+        const rec = learnedRecord(s.type, m);
+        if (rec && P.parseSlot(0, rec).text === s.text) return m;
+      }
+    }
+    return s.model;
+  }
   const info = typeInfo(s.type);
   if (s.model !== USER_MODEL || !info.user_slots) return s.model;
   const names = (info.user_list !== undefined && app.userNames[info.user_list]) || {};
@@ -507,6 +534,7 @@ function handle(f) {
     const fresh = app.loading || !app.preset || p[0] !== app.preset.preset;
     app.loading = false;
     app.preset = P.parsePreset(p);
+    app.preset.slots.forEach(learnCapture);
     if (fresh) app.dirty = false;
     app.toSend.clear();
     app.quietUntil.clear();
@@ -515,6 +543,7 @@ function handle(f) {
     renderPreset();
   } else if (f.cmd === R.SLOT && app.preset) {
     const s = P.parseSlot(p[0], p.subarray(1, 51));
+    learnCapture(s);
     if (!((app.quietUntil.get(s.index) || 0) > Date.now())) {   // ignore echoes of our own knob edits
       app.preset.slots[s.index] = s;
       app.dirty = true;
@@ -967,7 +996,8 @@ function knobParse(k, text) {
 /** The model list: click the button, then point and click a model. User capture / IR rows carry + (load a
  *  capture into an empty slot) and − (delete it), like Mooer Studio; those and choosing a user slot wait for a
  *  Mooer Studio capture of the commands, because guessing them locked the pedal up. */
-const USER_HINT = 'Not possible yet: the command is still unknown (needs a Mooer Studio capture)';
+const PM_HINT = 'Loading and deleting captures is not possible yet: the command is still unknown (needs a Mooer Studio capture)';
+const USER_HINT = 'Choose this capture once on the pedal itself; after that you can choose it here too';
 function buildModelPicker(box, s) {
   const btn = box.querySelector('button.model'), list = box.querySelector('.mlist');
   const cur = uiModel(s);
@@ -996,17 +1026,27 @@ function buildModelPicker(box, s) {
       pm.className = 'pm';
       pm.textContent = empty ? '+' : '−';
       pm.setAttribute('aria-label', (empty ? 'Load a capture into ' : 'Delete the capture in ') + label.split(' | ')[0]);
-      pm.title = USER_HINT;
+      pm.title = PM_HINT;
       pm.setAttribute('aria-disabled', 'true');
-      pm.addEventListener('click', (e) => { e.stopPropagation(); toast(USER_HINT, true); });
+      pm.addEventListener('click', (e) => { e.stopPropagation(); toast(PM_HINT, true); });
       row.appendChild(pm);
     }
     list.appendChild(row);
   }
   btn.querySelector('.mcur').textContent = list.querySelector('.cur .mname')?.textContent || '';
   const rows = () => Array.from(list.querySelectorAll('.mname'));
+  function place() {
+    const b = btn.getBoundingClientRect();
+    const below = innerHeight - b.bottom - 12, above = b.top - 12;
+    list.style.left = Math.max(8, Math.min(b.left, innerWidth - list.offsetWidth - 8)) + 'px';
+    if (below >= 240 || below >= above) { list.style.top = (b.bottom + 4) + 'px'; list.style.bottom = ''; list.style.maxHeight = below + 'px'; }
+    else { list.style.top = ''; list.style.bottom = (innerHeight - b.top + 4) + 'px'; list.style.maxHeight = above + 'px'; }
+  }
   function open() {
     list.hidden = false;
+    place();
+    addEventListener('resize', close);
+    document.querySelector('main').addEventListener('scroll', close, { once: true });
     btn.setAttribute('aria-expanded', 'true');
     const c = list.querySelector('.cur .mname') || rows()[0];
     c.scrollIntoView({ block: 'center' });
@@ -1017,6 +1057,7 @@ function buildModelPicker(box, s) {
     list.hidden = true;
     btn.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outside);
+    removeEventListener('resize', close);
   }
   function outside(e) { if (!box.contains(e.target)) close(); }
   btn.addEventListener('click', () => (list.hidden ? open() : close()));
@@ -1072,7 +1113,11 @@ function renderEditor() {
 
 function setModel(s, m) {
   if (m < 0 || m >= modelCount(s.type) || m === uiModel(s) || !modelSelectable(s.type, m)) return;
-  setWireModel(s, m);
+  const rec = m >= typeInfo(s.type).models.length && learnedRecord(s.type, m);
+  if (rec) {                                // the pedal's own record for this capture
+    const keepOn = s.enabled;
+    Object.assign(s, P.parseSlot(s.index, rec), { enabled: keepOn });
+  } else setWireModel(s, m);
   pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
   renderChain(); renderEditor();
 }
