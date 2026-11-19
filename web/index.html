@@ -384,6 +384,14 @@ function learnCapture(s) {
   const key = `${s.type}:w${s.model}`, hex = Array.from(s.raw, (b) => b.toString(16).padStart(2, '0')).join('');
   if (learned[key] === hex) return;
   learned[key] = hex;
+  learned[`${s.type}:wok`] = '1';   // the numbering is confirmed for this type, also after the slot is emptied
+  try { localStorage.setItem('ge100pro.captures', JSON.stringify(learned)); } catch (e) { /* private mode */ }
+}
+/** A user slot was emptied or replaced: its remembered record no longer applies. */
+function forgetLearned(list, u) {
+  const type = Object.keys(M.types).map(Number).find((t) => typeInfo(t).user_list === list);
+  if (type === undefined) return;
+  delete learned[`${type}:w${USER_BASE + u - 1}`];
   try { localStorage.setItem('ge100pro.captures', JSON.stringify(learned)); } catch (e) { /* private mode */ }
 }
 /** The pedal's own record for editor model m (a user slot), if the pedal has sent one. */
@@ -879,6 +887,7 @@ async function deleteCapture(list, u, name) {
     const bytes = Array.from(name.slice(0, 24), (c) => c.charCodeAt(0) & 0x7f);
     const ack = (await request(P.CMD.USER_DELETE, [list, u & 0xff, u >> 8, 1, ...bytes], P.REPLY.USER_DELETE, 3000)).payload;
     if (ack[3] !== 1) throw new Error('the pedal did not delete the capture');
+    forgetLearned(list, u);
     await request(P.CMD.LIST, [list, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
     toast(`Deleted "${name}"`);
   } catch (e) { fail(e); }
@@ -923,12 +932,12 @@ const LOADERS = {
        help: 'Only <b>.wav</b> IR files can be loaded. The pedal takes the first 1024 samples of the first channel, at 44.1 kHz.' },
 };
 
-function pickGnr(list, u, slotIndex) {
+function pickGnr(list, u, slotIndex, replacing = '') {
   if (!app.dev || app.busy) return;
   const L = LOADERS[list];
   if (!L) return;
   const dlg = $('gnrDlg'), file = $('gnrFile'), name = $('gnrName'), info = $('gnrInfo'), load = $('gnrLoad');
-  $('gnrTitle').textContent = `Load a ${L.what} into user slot ${u}`;
+  $('gnrTitle').textContent = replacing ? `Replace "${replacing}" in user slot ${u}` : `Load a ${L.what} into user slot ${u}`;
   $('gnrHelp').innerHTML = L.help;
   $('gnrFileLabel').textContent = `.${L.ext} file`;
   file.accept = '.' + L.ext;
@@ -948,7 +957,7 @@ function pickGnr(list, u, slotIndex) {
     } catch (e) { info.textContent = 'Can\'t use this file: ' + e.message; }
   };
   name.oninput = () => { load.disabled = !data || !name.value.trim(); };
-  dlg.onclose = () => { if (dlg.returnValue === 'load' && data) uploadCapture(list, u, name.value.trim(), data, slotIndex); };
+  dlg.onclose = () => { if (dlg.returnValue === 'load' && data) uploadCapture(list, u, name.value.trim(), data, slotIndex, replacing); };
   dlg.returnValue = '';
   dlg.showModal();
 }
@@ -956,7 +965,7 @@ function pickGnr(list, u, slotIndex) {
 /** Load capture data into user slot u, as Mooer Studio does (capture 07 / 08):
  *  0x61 [list, slot u16, parts, index, length u16, bytes] for each part, answered by 0x62 [list, slot u16, index].
  *  Part 0 is the name, parts 1.. carry 512 bytes each. The pedal then pushes the new entry as 0x69. */
-async function uploadCapture(list, u, name, data, slotIndex) {
+async function uploadCapture(list, u, name, data, slotIndex, replacing = '') {
   if (!app.dev || app.busy) return;
   const chunks = [];
   for (let o = 0; o < data.length; o += 512) chunks.push(data.subarray(o, o + 512));
@@ -965,6 +974,13 @@ async function uploadCapture(list, u, name, data, slotIndex) {
   const nameBytes = Array.from(name.slice(0, 18), (c) => c.charCodeAt(0) & 0x7f);
   app.busy = true;
   try {
+    if (replacing) {                          // replace = delete (67) first, then load into the emptied slot
+      const old = Array.from(replacing.slice(0, 24), (c) => c.charCodeAt(0) & 0x7f);
+      const ack = (await request(P.CMD.USER_DELETE, [list, u & 0xff, u >> 8, 1, ...old], P.REPLY.USER_DELETE, 3000)).payload;
+      if (ack[3] !== 1) throw new Error(`the pedal did not remove "${replacing}"`);
+      forgetLearned(list, u);
+      await sleep(200);
+    }
     const part = async (index, bytes) => {
       const ack = (await request(P.CMD.USER_UPLOAD, [list, u & 0xff, u >> 8, parts, index, bytes.length & 0xff, bytes.length >> 8, ...bytes], P.REPLY.USER_UPLOAD, 3000)).payload;
       if (ack[3] !== index) throw new Error(`the pedal did not take part ${index} of the capture`);
@@ -1160,30 +1176,26 @@ function buildModelPicker(box, s) {
     if (!ok) { name.setAttribute('aria-disabled', 'true'); name.title = USER_HINT; row.classList.add('off'); }
     if (m === cur) { row.classList.add('cur'); row.setAttribute('aria-selected', 'true'); }
     name.addEventListener('click', () => { if (!ok) return; close(); if (m !== cur) setModel(s, m); });
-    if (m >= info.models.length && m < modelCount(s.type)) {   // a user slot: + or −
+    if (m >= info.models.length && m < modelCount(s.type)) {   // a user slot: + (load / replace) and − (delete)
       const empty = / \| EMPTY$/.test(label);
-      const pm = document.createElement('button');
-      pm.type = 'button';
-      pm.className = 'pm';
-      pm.textContent = empty ? '+' : '−';
-      pm.setAttribute('aria-label', (empty ? 'Load a capture into ' : 'Delete the capture in ') + label.split(' | ')[0]);
       const u = m - info.models.length + 1;
-      const canDelete = !empty && (info.user_list === 2 || info.user_list === 1);   // amps: capture 07, cabs: capture 09
-      if (canDelete) {
-        pm.title = `Delete this capture from the pedal (user slot ${u})`;
-        pm.classList.add('live');
-        pm.addEventListener('click', (e) => { e.stopPropagation(); close(); deleteCapture(info.user_list, u, label.split(' | ').slice(1).join(' | ')); });
-      } else if (empty && LOADERS[info.user_list]) {
-        pm.title = `Load a .${LOADERS[info.user_list].ext} ${LOADERS[info.user_list].what} into user slot ${u}`;
-        pm.classList.add('live');
-        pm.removeAttribute('aria-disabled');
-        pm.addEventListener('click', (e) => { e.stopPropagation(); close(); pickGnr(info.user_list, u, s.index); });
-      } else {
-        pm.title = empty ? PM_ADD_HINT : PM_HINT;
-        pm.setAttribute('aria-disabled', 'true');
-        pm.addEventListener('click', (e) => { e.stopPropagation(); toast(pm.title, true); });
+      const current = empty ? '' : label.split(' | ').slice(1).join(' | ');
+      const L = LOADERS[info.user_list];        // amps: captures 07/08, cabs: capture 09
+      const button = (text, aria, title, live, action) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'pm'; b.textContent = text; b.title = title;
+        b.setAttribute('aria-label', aria);
+        if (live) { b.classList.add('live'); b.addEventListener('click', (e) => { e.stopPropagation(); close(); action(); }); }
+        else { b.setAttribute('aria-disabled', 'true'); b.addEventListener('click', (e) => { e.stopPropagation(); toast(title, true); }); }
+        row.appendChild(b);
+      };
+      button('+', (empty ? 'Load into ' : 'Replace ') + label.split(' | ')[0],
+        L ? (empty ? `Load a .${L.ext} ${L.what} into user slot ${u}` : `Replace "${current}" with another .${L.ext} ${L.what}`) : PM_ADD_HINT,
+        Boolean(L), () => pickGnr(info.user_list, u, s.index, current));
+      if (!empty) {
+        button('−', 'Delete ' + label.split(' | ')[0], L ? `Delete this ${L.what} from the pedal (user slot ${u})` : PM_HINT,
+          Boolean(L), () => deleteCapture(info.user_list, u, current));
       }
-      row.appendChild(pm);
     }
     list.appendChild(row);
   }
