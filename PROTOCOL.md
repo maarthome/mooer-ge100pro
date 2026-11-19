@@ -11,7 +11,14 @@ Captures so far:
 | Fixture | What | Firmware |
 |---|---|---|
 | `capture1_xxd.txt` | pedal pushes on Linux (`cat /dev/hidraw0`): presets scrolled, a block toggled, knobs turned | V1.3.3 |
-| `01_connect_ge100pro.pcapng` | Mooer Studio (Windows) starting up and reading the pedal; filtered to the pedal only | V1.3.3 |
+| `01_connect_ge100pro.pcapng` | Mooer Studio (Windows) starting up and reading the pedal | V1.3.3 |
+| `02_select_preset.pcapng` | Mooer Studio: select presets 1, 4, 7 | V1.3.3 |
+| `03_knob.pcapng` | Mooer Studio: one knob (amp, knob 2) swept 39 → 0 → 100 | V1.3.3 |
+| `04_toggle_block.pcapng` | Mooer Studio: two slots switched off and on | V1.3.3 |
+| `05_change_model.pcapng` | Mooer Studio: delay model changed four times | V1.3.3 |
+| `06_pedal_side.pcapng` | Mooer Studio **saves preset 6** and selects preset 10; then a knob turned on the pedal | V1.3.3 |
+
+All `.pcapng` fixtures are filtered to the pedal only (see §6).
 
 ## 1. USB device [V]
 
@@ -54,9 +61,11 @@ belongs to the same command family as the M2 (see §8), although its records dif
 |---|---|---|---|
 | `01` | `00` | `02` | device info |
 | `11` | — | `12`, then `49` | global state |
+| `21` | preset (u16) | `22` | a preset, same layout as `32`. Sent 1 ms after a `13` it returns the new number and name but the **previous** preset's slots: wait for the pedal's own `32` push (≈300 ms) instead [V] |
 | `29` | first, last (1…150) | `2a` | preset names; Mooer Studio asks 30 at a time: 1–30, 31–60, … 121–150 |
 | `2b` | — | `2c` | 299 bytes, all `01` on this pedal [?] (on the M2: per-category availability / DSP budget) |
 | `31` | — | `32`, then `43 05 00` | the current preset (edit buffer?) |
+| `65` | type, first (u16), last (u16) | `66` | user capture list; Mooer Studio asks `02 0001 0014`: the 20 amp capture slots |
 
 Connect sequence of Mooer Studio V1.3.3: `11`, `11`, `2b`, (0.5 s) `11`, (0.5 s) `01 00`, `11`, `29 01 1e`, `29 1f 3c`,
 `29 3d 5a`, `29 5b 78`, `29 79 96`, `31`, `31`, then the same again from `11`/`2b`. It does not wait for a reply
@@ -127,13 +136,14 @@ Effect types seen (names where the parameter count and values fit the Prime M2's
 
 | Type | Seen as | Parameters seen |
 |---|---|---|
-| 0 | slot 3 in preset 61 | 4 × ~50 |
+| 0 | PRE-FX? (models 6, 7, 9) | 4: e.g. 100, 86, 43, 53 |
 | 1 | DRIVE (model 21) | 100, 10 (Gain, Tone? …) |
 | 2 | AMP (model 27) | 6: 70, 57, 48, 26, 25, 75 (Gain, Bass, Mid, Treble, Presence, Master) |
 | 3 | CAB (model 42), slot 9 | 0, 7941, 23 |
 | 4 | DYNA (model 1) | 4: 30, 85, 30, 50 (Attack, Ratio, Threshold, Level?) |
-| 5 | EQ-like (model 2) | 5 × ~16 (band gains around a centre of 16?) |
-| 7 | DELAY (models 8, 9) | see below |
+| 5 | EQ (models 2, 5) | model 2: 5 × ~16 (band gains, centre 16?); model 5: 22, 110, 7, **800**, 14, **1513/4000** (gain/freq pairs?) |
+| 6 | MOD (models 9, 12) | 3–4: e.g. 11, 26, 28, 47 (Rate, Mix, Tone, Depth as on the M2?) |
+| 7 | DELAY (models 0, 2, 4, 6, 8, 9) | see below |
 | 8 | REVERB (model 1) | 4: 0, 21, 50, 35 (Pre Delay, Level, Decay, Tone, as on the M2) |
 
 Delay, observed on the pedal (preset 1, slot 3, model 9) [V]: parameter 3 = time in ms, parameter 4 = subdivision; the
@@ -152,21 +162,42 @@ Note: the Prime M2 encodes a synced delay time as `0x8000 | index` instead; the 
 |---|---|---|
 | `05` | cursor on slot `byte 1`; also sent after every `32` reply | [V] |
 | `22` | slot opened / entered | [H] |
-| `0a`, `0c`, `0d`, `21`, `06` | an edit page was shown; a full `27` for that slot follows | [H] page or effect-type id |
+| `06` + type (`06`, `08`, `0a`, `0c`, `0d`) | that slot's edit page is shown (also the echo of the host's `41`) | [V] |
+| `21` | another page | [?] |
 
 ### `49` (6 bytes)
 
 `00 00 0f 05 56 00` after every `12` [V]. Meaning [?] (0x0f05 = 3845? 0x56 = 86?).
 
+### `66` user capture list [V for type 2]
+
+Entries of 29 bytes: `type, index (u16), used (1/0), flag (2 if used), name (24 bytes)`. Type 2 = the 20 user amp
+slots; in this pedal 1–4 hold NAM/MNRS captures ("ReverPlex CLN 1_z2", "Clean_9b5eltcb", …).
+
 ## 5. Commands that change the pedal
 
-**None confirmed yet.** `transport.GE100Pro.send()` only allows the read requests of §3.
+Seen from Mooer Studio on the wire [V]. **This code never sends them**: `transport.GE100Pro.send()` only allows the
+read requests of §3. Each is acknowledged with `request + 1` and payload `01`.
+
+| Command | Payload | Ack | Effect |
+|---|---|---|---|
+| `13` | the 44-byte state from `12`, with byte 0 = new preset | `14 01` | **selects a preset** (exactly the Prime M2 method: read the state, change the preset byte, write it all back). The pedal then pushes `32` with the new preset ≈300 ms later |
+| `25` | slot index + the full 50-byte slot record | `26 01` | **live edit of one slot**: knob values, on/off, model. Mooer Studio streams one `25` every ≈20 ms while a knob is dragged. Not stored until saved |
+| `41` | page, slot | `42 01` | pedal shows the edit page of that slot; **page = 6 + slot type** (amp 2 → `08`, dyna 4 → `0a`, delay 7 → `0d`; `06` and `0c` seen for types 0 and 6). The pedal echoes it as `43 page slot` |
+| `2f` | preset, 16-byte name | `30 01` | **saves the edit buffer to that preset slot, permanently** (Prime M2: `2f pp name[20]`) |
+
+Details [V]:
+- `25` records sent by Mooer Studio carry `1` in parameter 11; the pedal's own records have `0` there [?].
+- Model change: Mooer Studio sends `25` with the new model and that model's values; the pedal confirms with a `27`
+  push carrying the model and its parameters (delay: parameter 7 = 500 = parameter 3).
+- A save happened in capture 06 when the editor left a preset with unsaved edits: Mooer Studio sends `2f` **before**
+  selecting the next preset. Preset 6 was stored with its edited delay (model 4, switched off).
+
 
 Do not try opcodes from other Mooer models: on the GE150, `8B` and `BA` erase the pedal's memory and `B4 15` opens the
 reset prompt; on the GE200, `E4` erases IR flash and `E5` overwrites a preset slot; on the Prime M2, `81` may zero a
-preset and `a1` is a factory reset. The Prime M2's write commands (`13` select preset by writing the state, `25` set a
-slot, `2d` add/change/delete a slot, `2f` save) are the obvious candidates here, but they must be confirmed from a
-capture of Mooer Studio before anything sends them.
+preset and `a1` is a factory reset. Still to capture: adding, removing and moving slots (Prime M2: `2d`), renaming,
+captures/IR upload.
 
 ## 6. Capturing Mooer Studio
 
@@ -186,12 +217,11 @@ python3 -m ge100pro.pcapng filter captures/raw/IN.pcapng captures/OUT.pcapng
 python3 -m ge100pro captures/OUT.pcapng
 ```
 
-Next captures, one action each: select presets 1, 2, 3 in the editor; turn one knob; switch one slot off/on; change a
-model; then the same actions on the pedal with the editor open. No saving, renaming, uploads or resets yet.
+**When Mooer Studio asks to save changes while you capture, answer No**: it sends `2f` and stores the edit buffer.
 
 ## 7. Open questions
 
-1. The write commands: select preset, set a parameter, slot on/off, change a model, save (§5).
+1. Add / remove / move slots, rename, upload; what `2c` (availability) means.
 2. `12`/`15` offset 2 and the constant fields; `49`; `2c`.
 3. Slot record word 0 and the text field; the full effect type and model tables.
 4. Preset dump tail (12 bytes).

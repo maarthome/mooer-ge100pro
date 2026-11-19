@@ -22,3 +22,5 @@ SOFTWARE.
 
 Parts of src/ge100pro/crc.py and src/ge100pro/framing.py are
 Copyright (c) Matt Currier (fingerskier), MIT License; see NOTICE.md.
+Parts of src/ge100pro/hid_win.py are
+Copyright (c) 2026 Atahan Şevki Bilginoğlu, MIT License; see NOTICE.md.

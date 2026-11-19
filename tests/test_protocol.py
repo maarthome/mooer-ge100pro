@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ge100pro.crc import crc16
 from ge100pro.decode import frames_from_xxd
-from ge100pro.framing import Deframer, build_message, build_reports, parse_message
+from ge100pro.framing import Deframer, Frame, build_message, build_reports, parse_message
 from ge100pro.messages import DeviceInfo, Names, Navigation, PresetDump, Request, Slot, State, decode
 
 CAPTURE1 = Path(__file__).parent / "fixtures" / "capture1_xxd.txt"
@@ -110,3 +110,66 @@ def test_connect_decoded_content():
     assert used == [(0, 4, 1), (1, 1, 21), (2, 2, 27), (3, 5, 2), (4, 7, 8), (5, 8, 1), (9, 3, 42)]
     assert dump.slots[2].params[:6] == [70, 57, 48, 26, 25, 75]
     assert all(isinstance(m, Request) for m, (_, d, _f) in zip(msgs, frames_from_pcapng(str(CONNECT))) if d == "host")
+
+
+# --- Mooer Studio editing commands (captures 02-06, filtered to the pedal only) ------------
+
+FIX = Path(__file__).parent / "fixtures"
+
+
+def _frames(name):
+    return list(frames_from_pcapng(str(FIX / f"{name}.pcapng")))
+
+
+def _host(name, command):
+    return [f.payload for _, d, f in _frames(name) if d == "host" and f.command == command]
+
+
+def test_editing_captures_hold_only_the_pedal():
+    for name in ("02_select_preset", "03_knob", "04_toggle_block", "05_change_model", "06_pedal_side"):
+        assert len({(p.bus, p.device) for p in read_packets(str(FIX / f"{name}.pcapng"))}) == 1, name
+        assert all(f.crc_ok for _, _, f in _frames(name)), name
+
+
+def test_select_preset_writes_state_with_new_preset():
+    frames = _frames("02_select_preset")
+    states = [f.payload for _, d, f in frames if d == "pedal" and f.command == 0x12]
+    writes = _host("02_select_preset", 0x13)
+    assert [w[0] for w in writes] == [1, 4, 7]
+    # the written state is the state just read, with only byte 0 (the preset) changed
+    for state, write in zip(states, writes):
+        assert write[1:] == state[1:]
+    acks = [f.payload for _, d, f in frames if d == "pedal" and f.command == 0x14]
+    assert acks == [b"\x01"] * 3
+    dumps = [decode(f) for _, d, f in frames if d == "pedal" and f.command == 0x32]
+    assert [(m.preset, m.name) for m in dumps] == [(1, "Atlas Clean"), (4, "Single-Coil CL"), (7, "AC Chime Clean")]
+
+
+def test_knob_streams_set_slot():
+    recs = [decode(Frame(0x27, p)) for p in _host("03_knob", 0x25)]
+    assert {(r.index, r.type, r.model) for r in recs} == {(1, 2, 10)}
+    knob2 = [r.params[1] for r in recs]
+    assert (knob2[0], min(knob2), max(knob2), knob2[-1]) == (39, 0, 100, 100)
+    assert all(r.params[0] == 0 and r.params[2:6] == [39, 42, 50, 62] for r in recs)
+
+
+def test_toggle_is_set_slot_with_word2():
+    recs = [decode(Frame(0x27, p)) for p in _host("04_toggle_block", 0x25)]
+    assert [(r.index, r.enabled) for r in recs] == [(2, False), (2, True), (3, False), (3, True)]
+
+
+def test_open_page_is_6_plus_type():
+    pages = _host("03_knob", 0x41) + _host("04_toggle_block", 0x41) + _host("05_change_model", 0x41)
+    assert pages == [bytes([0x08, 1]), bytes([0x0A, 3]), bytes([0x0D, 4])]  # amp(2), dyna(4), delay(7)
+
+
+def test_change_model_is_set_slot_and_pedal_confirms():
+    frames = _frames("05_change_model")
+    sent = [decode(Frame(0x27, f.payload)).model for _, d, f in frames if d == "host" and f.command == 0x25]
+    pushed = [decode(f).model for _, d, f in frames if d == "pedal" and f.command == 0x27]
+    assert sent == pushed == [6, 4, 0, 4]
+
+
+def test_save_command_seen_in_capture_06():
+    saves = _host("06_pedal_side", 0x2F)
+    assert saves == [bytes([6]) + b"Single-Coil Lead"]

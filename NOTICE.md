@@ -33,8 +33,39 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## atahan26/ge200-editor
+
+- Source: https://github.com/atahan26/ge200-editor
+- Commit: `4787196d9e2865287f6415e880e7dbce9d555603` (2026-11-11)
+- File used: `ge200/hid_win.py` → `src/ge100pro/hid_win.py` (VID/PID and an error message changed, see the file header)
+- License: MIT. The license text:
+
+```
+MIT License
+
+Copyright (c) 2026 Atahan Şevki Bilginoğlu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Protocol knowledge
 
 No code was copied from these projects, but their published findings informed this work; see PROTOCOL.md §6:
 andymann/mooer-prime-m2-app, lucanenni/mooer-prime-m2-web, klaushofrichter/ge150pro-editor,
-atahan26/ge200-editor, ThijsWithaar/MooerManager.
+ThijsWithaar/MooerManager.

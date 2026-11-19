@@ -1,13 +1,14 @@
 """Decode GE100 Pro traffic, live from hidraw, from an xxd dump or from a filtered Wireshark capture.
 
   python3 -m ge100pro                         # live, auto-detects /dev/hidrawN
-  python3 -m ge100pro /dev/hidraw0            # live, given node
+  python3 -m ge100pro /dev/hidraw0            # live, given node (Linux)
   python3 -m ge100pro capture.txt             # an `xxd -c 64` dump of /dev/hidrawN (pedal -> host only)
   python3 -m ge100pro capture.pcapng          # USBPcap capture: both directions, with timestamps
 """
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 
@@ -51,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         if src and src.endswith(".pcapng"):
             for ms, direction, frame in frames_from_pcapng(src):
                 print(f"{ms:9.1f}  {describe(frame, direction)}", flush=True)
-        elif src and not src.startswith("/dev/"):
+        elif src and os.path.isfile(src) and not src.startswith("/dev/"):
             for frame in frames_from_xxd(src):
                 print(describe(frame), flush=True)
         else:

@@ -1,6 +1,6 @@
 """Ask the pedal for its state, the same way Mooer Studio does when it connects. Read-only.
 
-  python3 -m ge100pro.probe            # device info, state, all 150 preset names, current preset
+  python3 -m ge100pro.probe            # device info, state, all 150 preset names, current preset, amp captures
 
 Sends only the read requests Mooer Studio sends to this pedal (see PROTOCOL.md §4). Close Mooer Studio first:
 only one program can use the control channel at a time.
@@ -24,6 +24,7 @@ def main() -> int:
                 *[(f"names {a}-{a + 29}", lambda a=a: pedal.request_names(a, a + 29)) for a in range(1, 151, 30)],
                 ("availability", pedal.request_availability),
                 ("current preset", pedal.request_current_preset),
+                ("user amp captures", pedal.request_amp_captures),
             ]
             for label, request in steps:
                 request()
