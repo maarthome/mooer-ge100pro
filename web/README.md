@@ -51,3 +51,12 @@ On Linux (the Pi), Chromium needs the udev rule from `udev/` for access to the p
 | `index.html` | the editor |
 | `protocol.js` | framing, CRC and message decoding (port of `src/ge100pro`), tested by `tests/test_web_protocol.py` |
 | `models.js` | model names, generated from `src/ge100pro/models.json` by `tools/gen_models_js.py` |
+
+## Settings file
+
+Settings are kept in the browser, and with **Settings > Save to file** also in `web/settings.js`, next to
+`index.html`. The first time, the browser asks where to save it: choose the `web` folder. After that every change
+is written there by itself (after a browser restart the editor asks once more, with the same button). On start the
+editor reads `settings.js` if it is there, so the settings move with the folder. `settings.js` is not in git, so
+`git pull` never overwrites it. In Brave the save window may be switched off (`brave://flags/#file-system-access-api`):
+then the button downloads `settings.js`; move it into the `web` folder yourself.
