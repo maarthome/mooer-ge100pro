@@ -105,7 +105,6 @@
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
   select.model { min-width: 240px; height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   select.model option, .knob.choice select option { background: var(--panel); color: var(--silk); }
-  select.model option:disabled, #addModel option:disabled { color: var(--led-off); }
   .ehead h2 { border-left: 4px solid var(--g, transparent); padding-left: 10px; }
   .knob.choice select { margin: 22px 0 18px; width: 96px; height: 34px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; font-weight: 600; text-align: center; }
   .note { color: var(--dim); font-size: 0.8667rem; max-width: 70ch; }
@@ -782,9 +781,9 @@ function pickBlock(index) {
     const t = Number(tSel.value);
     mSel.textContent = '';
     for (let m = 0; m < modelCount(t); m++) {
+      if (!modelSelectable(t, m)) continue;   // empty user slots are left out
       const o = document.createElement('option');
       o.value = m; o.textContent = modelLabel(t, m);
-      o.disabled = !modelSelectable(t, m);
       mSel.appendChild(o);
     }
     mSel.value = '0';
@@ -913,13 +912,13 @@ function renderEditor() {
     <select class="model" aria-label="Model"></select>`;
   const sel = head.querySelector('select.model');
   for (let m = 0; m < modelCount(s.type); m++) {
+    if (!modelSelectable(s.type, m) && m !== s.model) continue;   // empty user slots are left out
     const o = document.createElement('option');
     o.value = m; o.textContent = modelLabel(s.type, m);
-    o.disabled = !modelSelectable(s.type, m) && m !== s.model;
     sel.appendChild(o);
   }
   sel.value = String(s.model);
-  sel.addEventListener('change', () => setModel(s, Number(sel.value)));
+  sel.addEventListener('change', () => { if (sel.value !== '') setModel(s, Number(sel.value)); });
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
   head.style.setProperty('--g', groupColour(s.type));
   head.querySelector('.switch').addEventListener('click', () => toggleSlot(s));
