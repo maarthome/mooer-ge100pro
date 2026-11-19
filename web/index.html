@@ -91,6 +91,7 @@
   .bin.over { opacity: 1; border-style: solid; border-color: #e5534b; color: #e5534b; background: color-mix(in srgb, #e5534b 14%, transparent); }
   #gnrDlg input[type=file], #gnrDlg input[type=text] { display: block; width: 100%; min-width: 360px; margin: 4px 0 12px; font: inherit; }
   #gnrDlg input[type=text] { height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); }
+  #saveTarget { width: 100%; min-width: 360px; height: 34px; margin: 4px 0 6px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   #gnrDlg code { font-size: .9em; }
   #addDlg select { width: 100%; min-width: 320px; height: 34px; margin-bottom: 10px; }
   .slot.vacant { background: var(--chassis); border-style: dashed; border-top-width: 1px; color: var(--led-off); }
@@ -232,6 +233,8 @@
 <dialog id="saveDlg">
   <form method="dialog">
     <h3 id="saveTitle">Save preset</h3>
+    <label for="saveTarget">Save to preset</label>
+    <select id="saveTarget"></select>
     <p class="note" id="saveText"></p>
     <label for="saveName">Name (up to 16 characters)</label>
     <input id="saveName" maxlength="16" autocomplete="off">
@@ -769,23 +772,54 @@ function openPage(slot) {
 
 async function save() {
   if (!app.preset || !app.dev) return false;
-  const n = app.preset.preset;
-  $('saveTitle').textContent = `Save to preset ${bankLabel(n)}`;
-  $('saveText').textContent = `This permanently replaces what is stored in preset ${bankLabel(n)} ("${app.names[n] || app.preset.name}") with the sound you hear now.`;
-  $('saveName').value = app.preset.name;
+  const cur = app.preset.preset;
+  const isEmpty = (n) => !app.names[n] || app.names[n] === 'EMPTY';
+  const sel = $('saveTarget'), nameEl = $('saveName'), text = $('saveText'), ok = $('saveConfirm');
+  sel.textContent = '';
+  for (let n = 1; n <= 150; n++) {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = `${bankLabel(n)}  ${isEmpty(n) ? '(empty)' : app.names[n]}${n === cur ? '  (this preset)' : ''}`;
+    sel.appendChild(o);
+  }
+  sel.value = String(cur);
+  const update = (fillName) => {
+    const n = Number(sel.value);
+    if (fillName) nameEl.value = n === cur ? app.preset.name : (isEmpty(n) ? '' : app.names[n]);
+    $('saveTitle').textContent = `Save to preset ${bankLabel(n)}`;
+    text.textContent = isEmpty(n)
+      ? `Preset ${bankLabel(n)} is empty: give the new preset a name.`
+      : `This permanently replaces preset ${bankLabel(n)} ("${app.names[n]}") with the sound you hear now. You can change its name below.`;
+    nameEl.placeholder = isEmpty(n) ? 'Name for the new preset' : '';
+    ok.disabled = !nameEl.value.trim();
+    ok.textContent = isEmpty(n) ? 'Save' : 'Overwrite';
+  };
+  sel.onchange = () => update(true);
+  nameEl.oninput = () => update(false);
+  update(true);
   const dlg = $('saveDlg');
+  dlg.returnValue = '';
   dlg.showModal();
   const result = await new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue), { once: true }));
   if (result !== 'save') return false;
-  const name = $('saveName').value.trim() || app.preset.name;
+  const n = Number(sel.value);
+  const name = nameEl.value.trim();
+  if (!name) return false;
   try {
     const ack = await request(P.CMD.SAVE, [n, ...P.nameField(name)], P.REPLY.SAVE, 3000);
     if (ack.payload[0] !== 1) throw new Error('the pedal did not confirm the save');
     app.names[n] = name;
-    app.preset.name = name;
-    app.dirty = false;
+    if (n === cur) {
+      app.preset.name = name;
+      app.dirty = false;
+    } else {
+      // saved somewhere else: see which preset the pedal shows now
+      app.loading = true;
+      await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP).catch(() => {});
+      if (app.preset && app.preset.preset === n) app.dirty = false;
+    }
     renderPreset(); renderList();
-    toast(`Saved preset ${bankLabel(n)}`);
+    toast(`Saved preset ${bankLabel(n)} "${name}"`);
     return true;
   } catch (e) { fail(e); return false; }
 }
