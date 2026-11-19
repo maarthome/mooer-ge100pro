@@ -394,7 +394,7 @@ const app = {
 // ---------- transport ------------------------------------------------------------------
 function log(dir, f) {
   const el = $('log');
-  const line = `${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload.slice(0, 48), (b) => b.toString(16).padStart(2, '0')).join(' ')}${f.payload.length > 48 ? ' …' : ''}`;
+  const line = `${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload.slice(0, 64), (b) => b.toString(16).padStart(2, '0')).join(' ')}${f.payload.length > 64 ? ' …' : ''}`;
   const span = document.createElement('div');
   if (dir === 'host') span.className = 'h';
   span.textContent = line;
@@ -923,6 +923,11 @@ function renderEditor() {
     if (!modelSelectable(s.type, m) && m !== s.model) continue;   // empty user slots are left out
     const o = document.createElement('option');
     o.value = m; o.textContent = modelLabel(s.type, m);
+    sel.appendChild(o);
+  }
+  if (s.model >= modelCount(s.type)) {          // a model number the editor doesn't know: still show it
+    const o = document.createElement('option');
+    o.value = s.model; o.textContent = modelLabel(s.type, s.model) + ' (unknown)';
     sel.appendChild(o);
   }
   sel.value = String(s.model);
