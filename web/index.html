@@ -405,7 +405,8 @@ function modelSelectable(type, model) {
   if (model < info.models.length) return true;
   const u = model - info.models.length + 1;
   const names = info.user_list !== undefined && app.userNames[info.user_list];
-  if (!(info.user_slots && u <= info.user_slots && names && names[u])) return false;   // empty: never
+  if (!(info.user_slots && u <= info.user_slots)) return false;
+  // an EMPTY slot too (asked first, see the model list): the lock-ups came from the wrong numbers (72-91)
   // amp user slot u is model 100 + u - 1 on the wire (seen: user amp 75 = slot 3 = model 102);
   // for drives and cabs that is not confirmed yet, so only once the pedal itself has used the slot
   return numberingConfirmed(type) || Boolean(learnedRecord(type, model));
@@ -1175,7 +1176,15 @@ function buildModelPicker(box, s) {
     name.textContent = label;
     if (!ok) { name.setAttribute('aria-disabled', 'true'); name.title = USER_HINT; row.classList.add('off'); }
     if (m === cur) { row.classList.add('cur'); row.setAttribute('aria-selected', 'true'); }
-    name.addEventListener('click', () => { if (!ok) return; close(); if (m !== cur) setModel(s, m); });
+    name.addEventListener('click', () => {
+      if (!ok) return;
+      close();
+      if (m === cur) return;
+      if (/ \| EMPTY$/.test(label) && !window.confirm(
+        `${label.split(' | ')[0]} is an EMPTY user slot. Choosing an empty slot has not been tried on the pedal yet: ` +
+        'it may stay silent, or lock up until you switch it off and on.\n\nDon\'t save the preset before you know it works. Choose it anyway?')) return;
+      setModel(s, m);
+    });
     if (m >= info.models.length && m < modelCount(s.type)) {   // a user slot: + (load / replace) and − (delete)
       const empty = / \| EMPTY$/.test(label);
       const u = m - info.models.length + 1;
