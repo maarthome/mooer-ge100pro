@@ -61,7 +61,8 @@
 
   /* main */
   main { padding: 24px 28px 40px; overflow-y: auto; min-width: 0; }
-  .screen { display: flex; align-items: baseline; gap: 18px; margin-bottom: 22px; }
+  .screen { display: flex; align-items: baseline; gap: 18px; margin-bottom: 22px; flex-wrap: wrap; }
+  .screen .pname { white-space: nowrap; }
   .pnum { font-size: 4rem; line-height: .9; font-weight: 700; color: var(--led); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,178,62,.35); }
   .pname { font-size: 2.267rem; font-weight: 600; font-stretch: condensed; line-height: 1.05; overflow-wrap: anywhere; }
   .pstate { color: var(--dim); font-size: 0.9333rem; margin-top: 4px; }
@@ -91,6 +92,28 @@
   .bin.over { opacity: 1; border-style: solid; border-color: #e5534b; color: #e5534b; background: color-mix(in srgb, #e5534b 14%, transparent); }
   #gnrDlg input[type=file], #gnrDlg input[type=text] { display: block; width: 100%; min-width: 360px; margin: 4px 0 12px; font: inherit; }
   #gnrDlg input[type=text] { height: 34px; padding: 0 8px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); }
+  .globals { display: flex; gap: 10px; align-items: center; margin-left: 24px; flex-wrap: wrap; align-self: center; }
+  .gbox { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--edge); border-radius: var(--r); background: var(--chassis); color: var(--silk); font: inherit; }
+  .gbox .glabel { color: var(--dim); font-size: .85em; }
+  .gexp { cursor: pointer; }
+  .gexp:hover { border-color: var(--led); }
+  .tog { min-width: 30px; height: 26px; border-radius: 4px; border: 1px solid var(--edge); background: none; color: var(--dim); font: inherit; cursor: pointer; }
+  .tog[aria-pressed="true"] { background: var(--led); border-color: var(--led); color: #111; }
+  dialog.wide { max-width: min(980px, 96vw); }
+  .sys-grid { display: grid; grid-template-columns: 140px minmax(200px, 1fr) 90px; gap: 10px 14px; align-items: center; margin: 10px 0 14px; }
+  dialog .sys-grid label { margin: 0; color: var(--silk); font-size: 0.9333rem; }
+  .sys-grid input[type=range] { width: 100%; accent-color: var(--led); }
+  .sys-grid output { text-align: right; font-variant-numeric: tabular-nums; }
+  .sys-grid.off { opacity: .45; }
+  .sys-toggles { display: flex; gap: 22px; margin: 6px 0 14px; flex-wrap: wrap; }
+  .sys-toggles input, dialog h4 input, .exp-sw input { accent-color: var(--led); width: 18px; height: 18px; margin: 0; }
+  dialog .sys-toggles label, dialog h4 label, dialog label.exp-sw { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--silk); }
+  dialog label.exp-sw { margin: 8px 0; }
+  .exp-cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; }
+  .exp-mods, .exp-params { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+  .exp-params { max-height: 280px; overflow-y: auto; padding-top: 8px; border-top: 1px solid var(--edge); }
+  .exp-mods button, .exp-params button { height: 34px; border: 1px solid var(--edge); border-radius: var(--r); background: var(--chassis); color: var(--silk); font: inherit; cursor: pointer; }
+  .exp-mods button.on, .exp-params button.on { border-color: var(--led); color: var(--led); }
   #saveTarget { width: 100%; min-width: 360px; height: 34px; margin: 4px 0 6px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
   #gnrDlg code { font-size: .9em; }
   #addDlg select { width: 100%; min-width: 320px; height: 34px; margin-bottom: 10px; }
@@ -180,6 +203,8 @@
   <div class="mark">GE100 Pro <span>editor</span></div>
   <div class="conn"><span class="led" id="connLed"></span><span id="connText">Not connected</span></div>
   <button class="btn primary" id="connectBtn">Connect pedal</button>
+  <button class="btn" id="expBtn" disabled>EXP pedal</button>
+  <button class="btn" id="systemBtn" disabled>System</button>
   <button class="btn" id="settingsBtn">Settings</button>
 </header>
 
@@ -207,6 +232,13 @@
       <div class="screen">
         <div class="pnum" id="pnum">–</div>
         <div><div class="pname" id="pname"></div><div class="pstate" id="pstate"></div></div>
+        <div class="globals" id="globals">
+          <div class="gbox" title="Rhythm, as the pedal reports it"><span class="glabel">Rhythm</span><span id="gRhythm">–</span></div>
+          <div class="gbox"><span class="glabel">Cab sim</span>
+            <button class="tog" id="gCabL" type="button" aria-pressed="false">L</button>
+            <button class="tog" id="gCabR" type="button" aria-pressed="false">R</button></div>
+          <button class="gbox gexp" id="gExp" type="button" title="Expression pedal: click to change"><span class="glabel">EXP</span><span id="gExpText">–</span></button>
+        </div>
         <span class="spacer"></span>
         <div class="bin" id="bin" title="Drag a block here to remove it from the chain" aria-label="Remove block: drag a block here">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-3 6h12l-1 12H7L6 9zm4 2v8h1.5v-8H10zm3.5 0v8H15v-8h-1.5z"/></svg>
@@ -296,6 +328,50 @@
       <li>Model names from the GE100 Pro firmware; knob names, ranges and value encodings from MOOER Studio for GE100 Pro V1.3.3; preset banks from the GE100 Pro owner's manual.</li>
     </ul>
     <p class="note">MOOER, GE100 Pro and MOOER Studio are names of MOOER Audio. This editor is not made, endorsed or supported by MOOER Audio. Full details: CREDITS.md and NOTICE.md in the project.</p>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="systemDlg" class="wide">
+  <form method="dialog">
+    <h3>System</h3>
+    <p class="note">Settings of the pedal itself, for every preset. Each change goes to the pedal straight away.</p>
+    <div class="sys-grid">
+      <label for="sysInput">Input level</label><input id="sysInput" type="range" min="0" max="21" step="1"><output id="sysInputOut"></output>
+      <label for="sysOtg">OTG level</label><input id="sysOtg" type="range" min="0" max="21" step="1"><output id="sysOtgOut"></output>
+      <label for="sysBright">Brightness</label><input id="sysBright" type="range" min="1" max="20" step="1"><output id="sysBrightOut"></output>
+    </div>
+    <div class="sys-toggles">
+      <label><input type="checkbox" id="sysSpill"> Spill over</label>
+      <label><input type="checkbox" id="sysCabL"> Left out cab</label>
+      <label><input type="checkbox" id="sysCabR"> Right out cab</label>
+    </div>
+    <h4><label><input type="checkbox" id="sysEq"> Global EQ</label></h4>
+    <div class="sys-grid" id="sysEqGrid"></div>
+    <p class="note" id="sysVersion"></p>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
+  </form>
+</dialog>
+
+<dialog id="expDlg" class="wide">
+  <form method="dialog">
+    <h3>EXP pedal</h3>
+    <div class="exp-cols">
+      <div>
+        <h4>Function</h4>
+        <div class="exp-mods" id="expMods"></div>
+        <div class="exp-params" id="expParams"></div>
+        <p class="note" id="expNow"></p>
+      </div>
+      <div>
+        <h4>EXP vol pedal</h4>
+        <label class="exp-sw"><input type="checkbox" id="expVol"> On</label>
+        <div class="sys-grid">
+          <label for="expMin">Min</label><input id="expMin" type="range" min="0" max="100" step="1"><output id="expMinOut"></output>
+          <label for="expMax">Max</label><input id="expMax" type="range" min="0" max="100" step="1"><output id="expMaxOut"></output>
+        </div>
+      </div>
+    </div>
     <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
   </form>
 </dialog>
@@ -614,8 +690,12 @@ function onReport(ev) {
 // ---------- pedal -> editor --------------------------------------------------------------
 function handle(f) {
   const R = P.REPLY, p = f.payload;
+  if (f.cmd === R.RHYTHM && p.length >= 6) { app.rhythm = P.parseRhythm(p); renderGlobals(); }
+  if (f.cmd === R.VOL_PEDAL_STATE && p.length >= 6) { app.volPedal = P.parse3(p); renderGlobals(); renderExp(); }
+  if (f.cmd === R.EXP_PARAM_STATE && p.length >= 6) { app.expParam = P.parse3(p); renderGlobals(); renderExp(); }
   if (f.cmd === R.STATE || f.cmd === R.STATUS) {
     app.state = Uint8Array.from(p);
+    if (p.length >= 44 && !globalRunning) { app.global = P.parseGlobal(p); renderGlobals(); renderSystem(); }
     if (f.cmd === R.STATUS && app.preset && p[0] !== app.preset.preset && !app.busy) {
       // preset changed on the pedal: it usually pushes 0x32 by itself, but not always, so ask if it doesn't
       clearTimeout(app.followTimer);
@@ -674,6 +754,7 @@ async function connect(auto = false) {
     $('connectBtn').disabled = true;
     const info = P.parseDeviceInfo((await request(P.CMD.DEVICE_INFO, [0], P.REPLY.DEVICE_INFO)).payload);
     $('fw').textContent = `${info.name} firmware ${info.firmware}`;
+    app.firmware = info.firmware;
     await request(P.CMD.STATE, [], P.REPLY.STATE);
     for (let a = 1; a <= 150; a += 30) {
       const n = P.parseNames((await request(P.CMD.NAMES, [a, a + 29], P.REPLY.NAMES)).payload);
@@ -689,6 +770,7 @@ async function connect(auto = false) {
     $('preset').hidden = false;
     $('search').disabled = false;
     setConn('Connected', 'ok');
+    $('systemBtn').disabled = $('expBtn').disabled = false;
     $('connectBtn').hidden = true;
   } catch (e) {
     fail(e);
@@ -706,6 +788,8 @@ function setConn(text, led) {
 
 function disconnected() {
   app.dev = null;
+  $('systemBtn').disabled = $('expBtn').disabled = true;
+  for (const id of ['systemDlg', 'expDlg']) if ($(id).open) $(id).close();
   setConn('Not connected', '');
   $('connectBtn').disabled = false;
   $('connectBtn').hidden = false;
@@ -1114,6 +1198,172 @@ async function uploadCapture(list, u, name, data, slotIndex, replacing = '') {
   }
   app.busy = false;
   renderPreset();
+}
+
+// ---------- global settings, rhythm, EXP pedal (capture 10) ----------
+// Global settings are the 22 words of the state (0x12); Mooer Studio changes one by reading the state (0x11)
+// and sending it back with 0x13, the current preset unchanged: the same command as switching presets.
+const LEVELS = ['-∞', -60, -45, -35, -30, -25, -20, -10, -5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
+const levelText = (v) => (v === 0 ? '-∞ dB' : `${LEVELS[v] > 0 ? '+' : ''}${LEVELS[v]} dB`);
+const EQ_KNOBS = [   // stored ranges from Mooer Studio; shown as on the pedal (capture 10: 7722 = 7752 Hz, 64 = +16 dB)
+  { key: 'eq0', name: 'Low freq', max: 17970, text: (v) => `${v + 30} Hz` },
+  { key: 'eq1', name: 'Low gain', max: 64, text: (v) => dbText((v - 32) / 2) },
+  { key: 'eq2', name: 'Mid freq', max: 17970, text: (v) => `${v + 30} Hz` },
+  { key: 'eq3', name: 'Mid gain', max: 64, text: (v) => dbText((v - 32) / 2) },
+  { key: 'eq4', name: 'High freq', max: 17970, text: (v) => `${v + 30} Hz` },
+  { key: 'eq5', name: 'High gain', max: 64, text: (v) => dbText((v - 32) / 2) },
+  { key: 'eq6', name: 'Low cut', max: 800, text: (v) => (v ? `${20 + v - 1} Hz` : 'OFF') },
+  { key: 'eq7', name: 'High cut', max: 19001, text: (v) => (v ? `${20000 - (v - 1)} Hz` : 'OFF') },
+];
+function dbText(d) { return `${d > 0 ? '+' : ''}${d} dB`; }
+
+let globalPending = null, globalRunning = false;
+/** Change global settings; changes made quickly after each other (a slider) are sent as one, like Mooer Studio. */
+function setGlobal(changes) {
+  if (!app.dev) return;
+  globalPending = { ...(globalPending || {}), ...changes };
+  if (app.global) Object.assign(app.global, changes);
+  renderGlobals();
+  if (!globalRunning) runGlobal();
+}
+async function runGlobal() {
+  globalRunning = true;
+  try {
+    while (globalPending) {
+      const changes = globalPending;
+      globalPending = null;
+      const st = (await request(P.CMD.STATE, [], P.REPLY.STATE)).payload;
+      const g = P.parseGlobal(st);
+      Object.assign(g, changes);
+      g.preset = st[0] | (st[1] << 8);           // never switches the preset
+      const ack = (await request(P.CMD.SET_STATE, Array.from(P.encodeGlobal(g, st)), P.REPLY.SET_STATE)).payload;
+      if (ack[0] !== 1) throw new Error('the pedal did not take the setting');
+      app.global = g;
+      await sleep(30);
+    }
+  } catch (e) { fail(e); }
+  globalRunning = false;
+  renderGlobals(); renderSystem();
+}
+
+const EXP_MODULES = [   // Mooer Studio's order (block index on the wire) and parameter lists (parameter index)
+  { name: 'FX', params: ['Position', 'Q', 'Rate', 'Attack', 'Range', 'Sens', 'Thres', 'Peak', 'Ratio', 'Level', 'Depth', 'Comp', 'Low', 'High', 'Gain', 'Release', 'Mix', 'Sustain'] },
+  { name: 'DS', params: ['Volume', 'Tone', 'Gain'] },
+  { name: 'AMP', params: ['Gain', 'Bass', 'Middle', 'Treble', 'Presence', 'Volume'] },
+  { name: 'CAB', params: ['Low cut', 'High cut', 'Early reflection'] },
+  { name: 'NS', params: ['Thres', 'Sens', 'Attack', 'Release'] },
+  { name: 'EQ', params: ['Low', 'Mid', 'High', '62.5 Hz', '80 Hz', '100 Hz', '125 Hz', '200 Hz', '240 Hz', '250 Hz', '400 Hz', '500 Hz', '630 Hz', '750 Hz', '800 Hz', '1 kHz', '1.6 kHz', '2.2 kHz', '3.2 kHz', '4 kHz', '6.6 kHz'] },
+  { name: 'MOD', params: ['Rate', 'Pitch', 'Rise', 'Sample', 'Mix', 'Depth', 'Level', 'Feedback', 'Tone', 'Q', 'Range', 'Bit', 'Delay', 'Speed', 'Intensity', 'Sub', 'Sub tone', 'Upper', 'Upper tone', 'Dry', 'Duty'] },
+  { name: 'DLY', params: ['Level', 'Feedback', 'Time', 'Time A', 'Thres', 'Time B', 'Rate', 'Range', 'Bit', 'S rate', 'Mod rate', 'Mod depth'] },
+  { name: 'REV', params: ['Pre delay', 'Level', 'Decay', 'Tone', 'Shimmer'] },
+];
+const expText = () => {
+  if (!app.expParam) return '–';
+  const [m, i, on] = app.expParam, mod = EXP_MODULES[m];
+  return on && mod ? `${mod.name} ${mod.params[i] || i + 1}` : 'off';
+};
+
+function renderGlobals() {
+  const g = app.global;
+  $('gRhythm').textContent = app.rhythm ? `BPM ${app.rhythm.bpm}  Vol ${app.rhythm.volume}` : '–';
+  for (const [id, k] of [['gCabL', 'cabSimLeft'], ['gCabR', 'cabSimRight']]) {
+    $(id).setAttribute('aria-pressed', String(Boolean(g && g[k])));
+    $(id).disabled = !g || !app.dev;
+  }
+  $('gExpText').textContent = (app.volPedal && app.volPedal[0] ? 'Vol pedal' : '') || expText();
+}
+
+function renderSystem() {
+  const g = app.global;
+  if (!g || !$('systemDlg').open) return;
+  const slider = (id, value, text) => { $(id).value = value; $(id + 'Out').textContent = text; };
+  slider('sysInput', g.inputLevel, levelText(g.inputLevel));
+  slider('sysOtg', g.otgLevel, levelText(g.otgLevel));
+  slider('sysBright', g.brightness, String(g.brightness));
+  $('sysSpill').checked = Boolean(g.spillOver);
+  $('sysCabL').checked = Boolean(g.cabSimLeft);
+  $('sysCabR').checked = Boolean(g.cabSimRight);
+  $('sysEq').checked = Boolean(g.globalEq);
+  $('sysEqGrid').classList.toggle('off', !g.globalEq);
+  for (const k of EQ_KNOBS) slider('sys_' + k.key, g[k.key], k.text(g[k.key]));
+  $('sysVersion').textContent = app.firmware ? `Firmware ${app.firmware}` : '';
+}
+function openSystem() {
+  const grid = $('sysEqGrid');
+  if (!grid.childElementCount) {
+    for (const k of EQ_KNOBS) {
+      grid.insertAdjacentHTML('beforeend', `<label for="sys_${k.key}">${k.name}</label><input id="sys_${k.key}" type="range" min="0" max="${k.max}" step="1"><output id="sys_${k.key}Out"></output>`);
+      const el = $('sys_' + k.key);
+      el.oninput = () => { $('sys_' + k.key + 'Out').textContent = k.text(Number(el.value)); setGlobal({ [k.key]: Number(el.value) }); };
+    }
+  }
+  const range = (id, key, text) => { $(id).oninput = () => { const v = Number($(id).value); $(id + 'Out').textContent = text(v); setGlobal({ [key]: v }); }; };
+  range('sysInput', 'inputLevel', levelText);
+  range('sysOtg', 'otgLevel', levelText);
+  range('sysBright', 'brightness', String);
+  for (const [id, key] of [['sysSpill', 'spillOver'], ['sysCabL', 'cabSimLeft'], ['sysCabR', 'cabSimRight'], ['sysEq', 'globalEq']]) {
+    $(id).onchange = () => { setGlobal({ [key]: $(id).checked ? 1 : 0 }); renderSystem(); };
+  }
+  $('systemDlg').showModal();
+  renderSystem();
+  request(P.CMD.STATE, [], P.REPLY.STATE).catch(() => {});   // fresh values
+}
+
+let expModule = null;
+function renderExp() {
+  if (!$('expDlg').open) return;
+  const mods = $('expMods'), params = $('expParams');
+  const [cm, ci, con] = app.expParam || [null, null, 0];
+  if (expModule === null) expModule = con ? cm : 0;
+  mods.textContent = '';
+  EXP_MODULES.forEach((m, mi) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = m.name;
+    b.classList.toggle('on', mi === expModule);
+    b.onclick = () => { expModule = mi; renderExp(); };
+    mods.appendChild(b);
+  });
+  params.textContent = '';
+  EXP_MODULES[expModule].params.forEach((name, pi) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = name;
+    b.classList.toggle('on', Boolean(con) && cm === expModule && ci === pi);
+    b.onclick = () => setExpParam(expModule, pi);
+    params.appendChild(b);
+  });
+  $('expNow').textContent = app.expParam ? `The pedal controls: ${expText()}` : 'The pedal has not reported its EXP setting yet: choose a block and a parameter.';
+  const [von, vmin, vmax] = app.volPedal || [0, 0, 100];
+  $('expVol').checked = Boolean(von);
+  for (const [id, v] of [['expMin', vmin], ['expMax', vmax]]) { $(id).value = v; $(id + 'Out').textContent = String(v); $(id).disabled = !von; }
+}
+async function setExpParam(mod, param) {
+  try {
+    const ack = (await request(P.CMD.EXP_PARAM, P.encode3(mod, param, 1), P.REPLY.EXP_PARAM)).payload;
+    if (ack[0] !== 1) throw new Error('the pedal did not take the EXP setting');
+    app.expParam = [mod, param, 1];
+  } catch (e) { fail(e); }
+  renderExp(); renderGlobals();
+}
+let volTimer = null;
+function setVolPedal(on, min, max) {
+  app.volPedal = [on, min, max];
+  renderGlobals();
+  clearTimeout(volTimer);
+  volTimer = setTimeout(async () => {   // a slider: send the latest values
+    try {
+      const ack = (await request(P.CMD.VOL_PEDAL, P.encode3(...app.volPedal), P.REPLY.VOL_PEDAL)).payload;
+      if (ack[0] !== 1) throw new Error('the pedal did not take the volume pedal setting');
+    } catch (e) { fail(e); }
+  }, 40);
+}
+function openExp() {
+  expModule = null;
+  const cur = () => app.volPedal || [0, 0, 100];
+  $('expVol').onchange = () => { const [, a, b] = cur(); setVolPedal($('expVol').checked ? 1 : 0, a, b); renderExp(); };
+  $('expMin').oninput = () => { const [o, , b] = cur(); const v = Math.min(Number($('expMin').value), b); $('expMinOut').textContent = String(v); setVolPedal(o, v, b); };
+  $('expMax').oninput = () => { const [o, a] = cur(); const v = Math.max(Number($('expMax').value), a); $('expMaxOut').textContent = String(v); setVolPedal(o, a, v); };
+  $('expDlg').showModal();
+  renderExp();
 }
 
 /** Ask which block to put in an empty slot. */
@@ -1532,6 +1782,11 @@ $('settingsBtn').addEventListener('click', openSettings);
 $('creditsBtn').addEventListener('click', () => $('creditsDlg').showModal());
 $('connectBtn').addEventListener('click', () => connect(false));
 $('saveBtn').addEventListener('click', save);
+$('systemBtn').addEventListener('click', openSystem);
+$('expBtn').addEventListener('click', openExp);
+$('gExp').addEventListener('click', () => { if (app.dev) openExp(); });
+$('gCabL').addEventListener('click', () => app.global && setGlobal({ cabSimLeft: app.global.cabSimLeft ? 0 : 1 }));
+$('gCabR').addEventListener('click', () => app.global && setGlobal({ cabSimRight: app.global.cabSimRight ? 0 : 1 }));
 $('bin').addEventListener('dragover', (e) => {
   if (app.dragFrom === null || app.dragFrom === undefined) return;
   e.preventDefault();

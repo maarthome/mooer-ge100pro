@@ -142,6 +142,27 @@
     return out;
   }
 
+  /** Global settings (0x12 reply, sent back with 0x13): 22 little-endian u16 words (capture 10). */
+  const GLOBAL_FIELDS = ['preset', 'volume', 'inputLevel', 'cabSimLeft', 'cabSimRight', 'brightness', 'otgLevel',
+    'language', 'spillOver', 'bluetooth', 'globalEq', 'eq0', 'eq1', 'eq2', 'eq3', 'eq4', 'eq5', 'eq6', 'eq7',
+    'ambientLight', 'ambientSpeed', 'ambientBright'];
+  function parseGlobal(p) {
+    const g = {};
+    GLOBAL_FIELDS.forEach((k, i) => { g[k] = 2 * i + 1 < p.length ? u16(p, 2 * i) : 0; });
+    return g;
+  }
+  function encodeGlobal(g, base) {
+    const out = new Uint8Array(Math.max(44, base ? base.length : 0));
+    if (base) out.set(base);
+    GLOBAL_FIELDS.forEach((k, i) => { out[2 * i] = g[k] & 0xff; out[2 * i + 1] = (g[k] >> 8) & 0xff; });
+    return out;
+  }
+  /** Rhythm push (0x49): on, mode, style, volume, BPM u16. */
+  const parseRhythm = (p) => ({ on: p[0], mode: p[1], style: p[2], volume: p[3], bpm: u16(p, 4) });
+  /** 0x4f / 0x4d: volume pedal on, min, max;  0x55 / 0x53: EXP pedal block, parameter, on (u16 each). */
+  const parse3 = (p) => [u16(p, 0), u16(p, 2), u16(p, 4)];
+  const encode3 = (a, b, c) => [a & 255, a >> 8, b & 255, b >> 8, c & 255, c >> 8];
+
   /** 16-byte name field, space padded like the pedal's own names. */
   function nameField(name) {
     const out = new Uint8Array(16).fill(0x20);
@@ -155,17 +176,18 @@
   const CMD = {
     DEVICE_INFO: 0x01, STATE: 0x11, SET_STATE: 0x13, PRESET: 0x21, SET_SLOT: 0x25, NAMES: 0x29,
     AVAILABILITY: 0x2b, CHAIN: 0x2d, SAVE: 0x2f, CURRENT_PRESET: 0x31, OPEN_PAGE: 0x41, LIST: 0x65,
-    USER_UPLOAD: 0x61, USER_DELETE: 0x67,
+    USER_UPLOAD: 0x61, USER_DELETE: 0x67, VOL_PEDAL: 0x4d, EXP_PARAM: 0x53,
   };
   const REPLY = {
     DEVICE_INFO: 0x02, STATE: 0x12, SET_STATE: 0x14, STATUS: 0x15, PRESET: 0x22, SET_SLOT: 0x26, SLOT: 0x27,
     NAMES: 0x2a, AVAILABILITY: 0x2c, CHAIN: 0x2e, SAVE: 0x30, PRESET_DUMP: 0x32, OPEN_PAGE: 0x42, NAV: 0x43, LIST: 0x66, X49: 0x49,
     USER_UPLOAD: 0x62, USER_DELETE: 0x68, USER_ENTRY: 0x69,
+    VOL_PEDAL: 0x4e, VOL_PEDAL_STATE: 0x4f, EXP_PARAM: 0x54, EXP_PARAM_STATE: 0x55, RHYTHM: 0x49,
   };
 
   const api = {
     VENDOR_ID, PRODUCT_ID, REPORT_SIZE, CMD, REPLY, TYPE_NAMES, SLOT_RECORD, SLOT_PARAMS, PRESET_SLOTS,
-    crc16, buildMessage, buildReports, Deframer, parseSlot, encodeSlot, parsePreset, parseNames, parseList, parseDeviceInfo, nameField,
+    crc16, buildMessage, buildReports, Deframer, parseSlot, encodeSlot, parsePreset, parseNames, parseList, parseDeviceInfo, nameField, parseGlobal, encodeGlobal, parseRhythm, parse3, encode3,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GE100 = api;

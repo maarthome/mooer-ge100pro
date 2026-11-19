@@ -310,3 +310,32 @@ List **1** is the user cab IR list [V]. Loading works like an amp capture (`61` 
 in 9 parts: the name, then 8 × 512 bytes = **1024 float32 samples**. They are the first channel of the .wav, decoded
 at 44.1 kHz (resampled if needed), the first 1024 samples, zero padded; nothing else changed (no normalising)
 [V: the editor's version of the same .wav is identical byte for byte]. Deleting: `67 01 <slot u16> 01 <name>`.
+
+## Global settings, EXP pedal, rhythm (capture 10, Mooer Studio)
+
+**Global settings** are the state: `12` (reply to `11`) and `15` (push) carry 22 little-endian u16 words, and
+Mooer Studio changes one by reading `11`/`12` and sending all 44 bytes back with `13` (answered by `14 01`),
+the current preset unchanged — the same command as a preset switch [V]:
+
+| Word | Field | Values |
+|---|---|---|
+| 0 | preset | 1–150 |
+| 1 | volume | |
+| 2 | input level | 0–21 = -∞, -60, -45, -35, -30, -25, -20, -10, -5, 0, +0.5 … +6 dB [V: 21 = +6 dB] |
+| 3, 4 | cab sim thru left / right out | 0 / 1 [V] |
+| 5 | brightness | 1–20 [V] |
+| 6 | OTG level | as input level [V: 9 = 0 dB] |
+| 7 | language | |
+| 8 | spill over | 0 / 1 [V] |
+| 9 | bluetooth | |
+| 10 | global EQ on | 0 / 1 [V] |
+| 11–18 | global EQ: low freq, low gain, mid freq, mid gain, high freq, high gain, low cut, high cut | freq 0–17970 = 30 Hz + value [V: 7722 = 7752 Hz]; gain 0–64 = (value − 32) / 2 dB [V: 64 = +16 dB]; low cut 0–800, high cut 0–19001, 0 = OFF [H for the Hz] |
+| 19–21 | ambient light on, speed, brightness | |
+
+Mooer Studio's System window also sends `41 14` (page 20, cab sim) before a cab sim change; its top bar doesn't.
+
+| Message | Payload | Meaning |
+|---|---|---|
+| `53` → `54 01`, push `55` | block u16, parameter u16, on u16 | the EXP pedal controls this parameter. Blocks 0–8 = FX, DS, AMP, CAB, NS, EQ, MOD, DLY, REV; the parameter numbers count within the block (Mooer Studio's lists) [V] |
+| `4d` → `4e 01`, push `4f` | on u16, min u16, max u16 | EXP volume pedal, min / max 0–100 [V] |
+| `49` push | on, mode, style, volume, BPM u16 | rhythm, sent after every `12`; Mooer Studio only shows BPM and volume [V] |
