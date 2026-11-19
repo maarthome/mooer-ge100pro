@@ -539,7 +539,6 @@ const app = {
   dirty: false,
   busy: false,
   deafUntil: 0,       // no sends before this time (the pedal is busy after a chain edit)
-  showAll: false,
   toSend: new Set(),       // slots with edits still to send
   quietUntil: new Map(),   // slot -> time until which 0x27 echoes of our own edits are ignored
 };
@@ -1331,20 +1330,16 @@ function renderEditor() {
   const knobs = document.createElement('div');
   knobs.className = 'knobs';
   if (spec) spec.forEach((k, i) => knobs.appendChild(knob(s, i, k)));
-  const named = spec ? spec.length : 0;
-  if (!spec || app.showAll) {
-    for (let i = named; i < 10; i++) knobs.appendChild(knob(s, i, { name: `Param ${i + 1}`, kind: 'raw' }, true));
+  if (!spec) {                              // no knob table for this model: the raw parameters
+    for (let i = 0; i < 10; i++) knobs.appendChild(knob(s, i, { name: `Param ${i + 1}`, kind: 'raw' }, true));
   }
   ed.appendChild(knobs);
-
-  const foot = document.createElement('p');
-  foot.className = 'note';
-  foot.innerHTML = spec
-    ? `<button class="linkish">${app.showAll ? 'Hide the unused parameters' : 'Show the unused parameters too'}</button>`
-    : 'No knob table for this model: the raw parameters are shown.';
-  const b = foot.querySelector('button');
-  if (b) b.addEventListener('click', () => { app.showAll = !app.showAll; renderEditor(); });
-  ed.appendChild(foot);
+  if (!spec) {
+    const foot = document.createElement('p');
+    foot.className = 'note';
+    foot.textContent = 'No knob table for this model: the raw parameters are shown.';
+    ed.appendChild(foot);
+  }
 }
 
 function setModel(s, m) {
