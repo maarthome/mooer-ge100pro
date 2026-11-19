@@ -351,6 +351,14 @@ function modelSelectable(type, model) {
   const names = info.user_list !== undefined && app.userNames[info.user_list];
   return Boolean(info.user_slots && u <= info.user_slots && names && names[u]);
 }
+/** The slot's text field for a model: "MEMORY" for a factory model, the capture / IR name for a user slot
+ *  (as the pedal itself fills it). A model change that kept the old text locked the pedal up. */
+function slotText(type, model) {
+  const info = typeInfo(type);
+  if (model < info.models.length) return 'MEMORY';
+  const names = info.user_list !== undefined && app.userNames[info.user_list];
+  return (names && names[model - info.models.length + 1]) || 'MEMORY';
+}
 /** Model as the pedal shows it, e.g. "01 | 65 US DX"; user slots show the capture name read from the pedal. */
 function modelLabel(type, model) {
   const info = typeInfo(type), n = String(model + 1).padStart(2, '0');
@@ -807,7 +815,7 @@ async function addSlot(index, type, model) {
   const put = (o, v) => { s.raw[o] = v & 0xff; s.raw[o + 1] = v >> 8; };
   put(0, 1); put(2, type); put(4, 1); put(6, model);
   s.params = new Array(s.params.length).fill(0);
-  s.text = '';
+  s.text = slotText(type, model);
   app.quietUntil.delete(index);
   app.sel = index;
   app.dirty = true;
@@ -947,6 +955,7 @@ function renderEditor() {
 function setModel(s, m) {
   if (m < 0 || m >= modelCount(s.type) || m === s.model || !modelSelectable(s.type, m)) return;
   s.model = m;
+  s.text = slotText(s.type, m);
   pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
   renderChain(); renderEditor();
 }

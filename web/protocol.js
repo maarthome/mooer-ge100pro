@@ -106,6 +106,11 @@
     put(6, slot.model);
     slot.params.forEach((v, i) => put(8 + 2 * i, v));
     put(8 + 2 * 10, 1);
+    // bytes 30-49: "MEMORY" for a factory model, the capture / IR name for a user slot
+    if (typeof slot.text === 'string') {
+      r.fill(0, 30, 50);
+      for (let i = 0; i < Math.min(slot.text.length, 20); i++) r[30 + i] = slot.text.charCodeAt(i) & 0x7f;
+    }
     return r;
   }
 

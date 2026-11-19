@@ -209,6 +209,10 @@ slots, which are amp models 73–92; in this pedal 1–4 hold NAM/MNRS captures 
 
 **The pedal does not send factory model names**: those come from the manual (`models.json`). The 20-byte text field
 of a slot record holds the name of the capture in use ("1971 Fender Twin R" appeared there) or `MEMORY`.
+A `25` that changes the model must also set this field (`MEMORY` for a factory model, the capture name for a user
+slot): changing an amp model while keeping the old text, or picking an empty user slot, made the pedal show a garbage
+amp name and drop off USB until it was switched off and on (2026-11-19). Mooer Studio also sends the new model's default
+knob values with a model change; the editor keeps the old values and takes the pedal's `27` answer.
 
 ## 5. Commands that change the pedal
 
