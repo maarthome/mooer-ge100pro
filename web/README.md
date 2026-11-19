@@ -11,8 +11,8 @@ What it does:
 - move a block: drag its card to another place in the chain
 - add a block: click **+** on an empty slot, pick the group and the model
 - remove a block: drag its card onto the bin above the chain, on the right
-- per slot: pick the model from a drop-down (empty user capture / IR slots are left out: choosing one
-  makes the pedal show a garbage name and drop off USB), turn the knobs (drag up/down, mouse wheel, arrow keys,
+- per slot: pick the model from a drop-down (user capture / IR slots are not offered yet: the right
+  command is still unknown; the preset's own capture shows as e.g. 93 | name, like Mooer Studio), turn the knobs (drag up/down, mouse wheel, arrow keys,
   double-click or Enter to type a value; hold Shift for fine steps); delay sub-divisions are drop-downs
 - Settings (saved in this browser): five text sizes (parameter names in the editor, block names and group names in
   the chain, the editor heading, all other text), colours, and a colour per effect group

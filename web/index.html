@@ -347,6 +347,9 @@ const modelCount = (t) => typeInfo(t).models.length + (typeInfo(t).user_slots ||
 function modelSelectable(type, model) {
   const info = typeInfo(type);
   if (model < info.models.length) return true;
+  // User slots stay off until a Mooer Studio capture shows how it selects one: the list position (72-91)
+  // locked the pedal up, and 120 + name only renames the preset's own capture (pedal shows "93:<name>").
+  if (!USER_SLOTS_SELECTABLE) return false;
   const u = model - info.models.length + 1;
   const names = info.user_list !== undefined && app.userNames[info.user_list];
   return Boolean(info.user_slots && u <= info.user_slots && names && names[u]);
@@ -364,7 +367,9 @@ function slotText(type, model) {
  *  instead made the pedal show Chinese characters and drop off USB. In the editor a user slot u is
  *  numbered factory count + u - 1 (as the pedal lists it); these two functions convert. */
 const USER_MODEL = 120;
+const USER_SLOTS_SELECTABLE = false;
 function uiModel(s) {
+  if (!USER_SLOTS_SELECTABLE) return s.model;   // show 120 as Mooer Studio does: "93 | <name>"
   const info = typeInfo(s.type);
   if (s.model !== USER_MODEL || !info.user_slots) return s.model;
   const names = (info.user_list !== undefined && app.userNames[info.user_list]) || {};
