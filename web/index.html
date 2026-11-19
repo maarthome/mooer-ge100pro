@@ -99,13 +99,16 @@
   .gexp:hover { border-color: var(--led); }
   .tog { min-width: 30px; height: 26px; border-radius: 4px; border: 1px solid var(--edge); background: none; color: var(--dim); font: inherit; cursor: pointer; }
   .tog[aria-pressed="true"] { background: var(--led); border-color: var(--led); color: #111; }
-  dialog.wide { max-width: min(980px, 96vw); }
-  .sys-grid { display: grid; grid-template-columns: 140px minmax(200px, 1fr) 90px; gap: 10px 14px; align-items: center; margin: 10px 0 14px; }
+  dialog.wide { max-width: min(1180px, 97vw); max-height: none; overflow: visible; }
+  .sys-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .sys-cols h4 { margin-top: 10px; }
+  @media (max-width: 900px) { .sys-cols { grid-template-columns: 1fr; } dialog.wide { overflow: auto; max-height: 96vh; } }
+  .sys-grid { display: grid; grid-template-columns: 110px minmax(160px, 1fr) 80px; gap: 8px 12px; align-items: center; margin: 10px 0 14px; }
   dialog .sys-grid label { margin: 0; color: var(--silk); font-size: 0.9333rem; }
   .sys-grid input[type=range] { width: 100%; accent-color: var(--led); }
   .sys-grid output { text-align: right; font-variant-numeric: tabular-nums; }
   .sys-grid.off { opacity: .45; }
-  .sys-toggles { display: flex; gap: 22px; margin: 6px 0 14px; flex-wrap: wrap; }
+  .sys-toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 22px; margin: 6px 0 14px; }
   .sys-toggles input, dialog h4 input, .exp-sw input { accent-color: var(--led); width: 18px; height: 18px; margin: 0; }
   dialog .sys-toggles label, dialog h4 label, dialog label.exp-sw { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--silk); }
   dialog label.exp-sw { margin: 8px 0; }
@@ -336,6 +339,7 @@
   <form method="dialog">
     <h3>System</h3>
     <p class="note">Settings of the pedal itself, for every preset. Each change goes to the pedal straight away.</p>
+    <div class="sys-cols"><div>
     <div class="sys-grid">
       <label for="sysInput">Input level</label><input id="sysInput" type="range" min="0" max="21" step="1"><output id="sysInputOut"></output>
       <label for="sysOtg">OTG level</label><input id="sysOtg" type="range" min="0" max="21" step="1"><output id="sysOtgOut"></output>
@@ -345,11 +349,14 @@
       <label><input type="checkbox" id="sysSpill"> Spill over</label>
       <label><input type="checkbox" id="sysCabL"> Left out cab</label>
       <label><input type="checkbox" id="sysCabR"> Right out cab</label>
+      <label><input type="checkbox" id="sysBt"> Bluetooth</label>
     </div>
+    <p class="note" id="sysVersion"></p>
+    </div><div>
     <h4><label><input type="checkbox" id="sysEq"> Global EQ</label></h4>
     <div class="sys-grid" id="sysEqGrid"></div>
-    <p class="note" id="sysVersion"></p>
-    <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
+    </div></div>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Done</button></div>
   </form>
 </dialog>
 
@@ -372,7 +379,7 @@
         </div>
       </div>
     </div>
-    <div class="dlg-actions"><button class="btn primary" value="ok">Close</button></div>
+    <div class="dlg-actions"><button class="btn primary" value="ok">Done</button></div>
   </form>
 </dialog>
 
@@ -1283,6 +1290,7 @@ function renderSystem() {
   $('sysSpill').checked = Boolean(g.spillOver);
   $('sysCabL').checked = Boolean(g.cabSimLeft);
   $('sysCabR').checked = Boolean(g.cabSimRight);
+  $('sysBt').checked = Boolean(g.bluetooth);
   $('sysEq').checked = Boolean(g.globalEq);
   $('sysEqGrid').classList.toggle('off', !g.globalEq);
   for (const k of EQ_KNOBS) slider('sys_' + k.key, g[k.key], k.text(g[k.key]));
@@ -1301,7 +1309,7 @@ function openSystem() {
   range('sysInput', 'inputLevel', levelText);
   range('sysOtg', 'otgLevel', levelText);
   range('sysBright', 'brightness', String);
-  for (const [id, key] of [['sysSpill', 'spillOver'], ['sysCabL', 'cabSimLeft'], ['sysCabR', 'cabSimRight'], ['sysEq', 'globalEq']]) {
+  for (const [id, key] of [['sysSpill', 'spillOver'], ['sysCabL', 'cabSimLeft'], ['sysCabR', 'cabSimRight'], ['sysBt', 'bluetooth'], ['sysEq', 'globalEq']]) {
     $(id).onchange = () => { setGlobal({ [key]: $(id).checked ? 1 : 0 }); renderSystem(); };
   }
   $('systemDlg').showModal();
