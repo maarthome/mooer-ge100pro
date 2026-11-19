@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GE100 Pro editor</title>
+<style>
+  :root {
+    --chassis: #2e3742;   /* powder-coated steel */
+    --panel: #38434f;
+    --raised: #44515f;
+    --edge: #556271;
+    --silk: #edf0f2;      /* silkscreen print */
+    --dim: #9aa6b2;
+    --led: #ffb23e;       /* amber LED, "on" and selection */
+    --led-off: #5a6571;
+    --danger: #ef5a5f;
+    --ok: #6fcf8f;
+    --font: "Bahnschrift", "DIN Alternate", "DIN 2014", "Barlow", "Segoe UI", system-ui, sans-serif;
+    --r: 6px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--chassis); color: var(--silk); font-family: var(--font);
+    font-size: 15px; line-height: 1.4; display: grid;
+    grid-template-rows: auto 1fr auto; min-height: 100vh;
+  }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+
+  /* top bar */
+  .bar { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-bottom: 1px solid var(--edge); }
+  .mark { font-weight: 700; font-size: 17px; letter-spacing: .02em; font-stretch: condensed; }
+  .mark span { color: var(--dim); font-weight: 400; }
+  .conn { display: flex; align-items: center; gap: 8px; color: var(--dim); margin-left: auto; font-size: 14px; }
+  .led { width: 10px; height: 10px; border-radius: 50%; background: var(--led-off); box-shadow: inset 0 1px 1px rgba(0,0,0,.4); flex: none; }
+  .led.on { background: var(--led); box-shadow: 0 0 8px var(--led); }
+  .led.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .btn { background: var(--raised); border: 1px solid var(--edge); border-radius: var(--r); padding: 7px 14px; cursor: pointer; }
+  .btn:hover:not(:disabled) { border-color: var(--dim); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--led); color: #2a2110; border-color: var(--led); font-weight: 600; }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
+
+  /* layout */
+  .work { display: grid; grid-template-columns: 280px 1fr; min-height: 0; }
+  @media (max-width: 860px) { .work { grid-template-columns: 1fr; } .presets { max-height: 260px; } }
+
+  /* preset list */
+  .presets { background: var(--panel); border-right: 1px solid var(--edge); display: flex; flex-direction: column; min-height: 0; }
+  .search { margin: 12px; padding: 7px 10px; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); }
+  .plist { list-style: none; margin: 0; padding: 0 0 12px; overflow-y: auto; flex: 1; }
+  .plist button { width: 100%; display: grid; grid-template-columns: 34px 1fr; gap: 6px; text-align: left; background: none; border: 0; padding: 5px 14px; cursor: pointer; }
+  .plist button:hover:not(:disabled) { background: var(--raised); }
+  .plist .num { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .plist .empty .nm { color: var(--led-off); }
+  .plist .cur { background: var(--raised); box-shadow: inset 3px 0 0 var(--led); }
+  .plist .cur .num { color: var(--led); }
+
+  /* main */
+  main { padding: 24px 28px 40px; overflow-y: auto; min-width: 0; }
+  .screen { display: flex; align-items: baseline; gap: 18px; margin-bottom: 22px; }
+  .pnum { font-size: 64px; line-height: .9; font-weight: 700; color: var(--led); font-variant-numeric: tabular-nums; text-shadow: 0 0 18px rgba(255,178,62,.35); }
+  .pname { font-size: 34px; font-weight: 600; font-stretch: condensed; line-height: 1.05; overflow-wrap: anywhere; }
+  .pstate { color: var(--dim); font-size: 14px; margin-top: 4px; }
+  .pstate.dirty { color: var(--led); }
+
+  /* signal chain */
+  .chain { position: relative; display: grid; grid-template-columns: repeat(10, minmax(84px, 1fr)); gap: 10px; margin: 0 0 28px; padding: 6px 0; }
+  .chain::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 3px; background: #1f262e; border-radius: 2px; }
+  @media (max-width: 1180px) { .chain { grid-template-columns: repeat(5, 1fr); } .chain::before { display: none; } }
+  .slot { position: relative; min-height: 92px; padding: 10px 10px 8px; border-radius: var(--r); background: var(--raised); border: 1px solid var(--edge); text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+  .slot:hover { border-color: var(--dim); }
+  .slot.sel { border-color: var(--led); box-shadow: 0 0 0 1px var(--led); }
+  .slot.off .stype { color: var(--dim); }
+  .slot.vacant { background: var(--chassis); border-style: dashed; cursor: default; color: var(--led-off); }
+  .slot .pos { font-size: 12px; color: var(--dim); }
+  .slot .stype { font-weight: 600; font-stretch: condensed; font-size: 16px; }
+  .slot .smodel { font-size: 13px; color: var(--dim); }
+  .slot .led { position: absolute; top: 10px; right: 10px; }
+  .slot .cursor { position: absolute; bottom: -7px; left: 50%; width: 10px; height: 10px; transform: translateX(-50%) rotate(45deg); background: var(--led); display: none; }
+  .slot.pedalcursor .cursor { display: block; }
+
+  /* slot editor */
+  .editor { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 18px 20px 22px; }
+  .ehead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
+  .ehead h2 { margin: 0; font-size: 22px; font-stretch: condensed; font-weight: 600; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
+  .stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; }
+  .stepper button { background: var(--raised); border: 0; width: 32px; height: 32px; cursor: pointer; font-size: 18px; }
+  .stepper output { min-width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
+  .note { color: var(--dim); font-size: 13px; max-width: 70ch; }
+  .knobs { display: flex; flex-wrap: wrap; gap: 18px 26px; }
+  .knob { width: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
+  .knob svg { width: 84px; height: 84px; cursor: ns-resize; }
+  .knob .val { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .knob .lbl { font-size: 13px; color: var(--dim); }
+  .knob input { width: 80px; text-align: center; background: var(--chassis); border: 1px solid var(--led); border-radius: 4px; font-size: 18px; padding: 2px; }
+  .knob:focus-visible { outline: none; }
+  .knob:focus-visible svg .cap { stroke: var(--led); stroke-width: 2; }
+  .linkish { background: none; border: 0; color: var(--dim); text-decoration: underline; cursor: pointer; padding: 0; font-size: 13px; }
+
+  /* intro / empty */
+  .intro { max-width: 62ch; }
+  .intro h1 { font-size: 34px; font-stretch: condensed; margin: 8px 0 12px; }
+  .intro ol { padding-left: 1.2em; }
+  .intro li { margin: 6px 0; }
+  .warn { border-left: 3px solid var(--danger); padding: 8px 12px; background: rgba(239,90,95,.08); }
+
+  /* footer */
+  footer { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-top: 1px solid var(--edge); font-size: 13px; color: var(--dim); }
+  footer a { color: var(--dim); }
+  .spacer { flex: 1; }
+  .log { position: fixed; right: 16px; bottom: 56px; width: min(720px, calc(100vw - 32px)); height: 300px; background: #222a33; border: 1px solid var(--edge); border-radius: 8px; overflow: auto; font: 12px/1.45 Consolas, "Cascadia Mono", monospace; padding: 8px 10px; white-space: pre; display: none; }
+  .log.open { display: block; }
+  .log .h { color: var(--led); }
+
+  /* dialog + toast */
+  dialog { background: var(--panel); color: var(--silk); border: 1px solid var(--edge); border-radius: 10px; padding: 20px 22px; max-width: 440px; }
+  dialog::backdrop { background: rgba(10,14,18,.6); }
+  dialog h3 { margin: 0 0 8px; font-size: 20px; }
+  dialog label { display: block; margin: 14px 0 4px; color: var(--dim); font-size: 13px; }
+  dialog input { width: 100%; padding: 7px 10px; background: var(--chassis); border: 1px solid var(--edge); border-radius: var(--r); }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--raised); border: 1px solid var(--edge); padding: 9px 16px; border-radius: var(--r); opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--danger); }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="mark">GE100 Pro <span>editor</span></div>
+  <div class="conn"><span class="led" id="connLed"></span><span id="connText">Not connected</span></div>
+  <button class="btn primary" id="connectBtn">Connect pedal</button>
+</header>
+
+<div class="work">
+  <aside class="presets" aria-label="Presets">
+    <input class="search" id="search" type="search" placeholder="Find a preset" aria-label="Find a preset" disabled>
+    <ul class="plist" id="plist"></ul>
+  </aside>
+
+  <main id="main">
+    <section class="intro" id="intro">
+      <h1>Connect your GE100 Pro</h1>
+      <ol>
+        <li>Plug the pedal's <b>data</b> USB-C port into this computer. The other port only charges.</li>
+        <li>Close Mooer Studio: only one program can talk to the pedal at a time.</li>
+        <li>Click <b>Connect pedal</b> and pick the GE100 Pro in the browser's list.</li>
+      </ol>
+      <p class="note">Selecting presets and turning knobs changes the sound right away but is not stored. Only
+        <b>Save</b> writes to the pedal, and it always asks first. This editor is unofficial and not made by Mooer.</p>
+      <p class="warn" id="noHid" hidden>This browser can't talk to USB devices. Use Microsoft Edge or Google Chrome, and
+        open the page from disk or from <code>http://localhost</code>.</p>
+    </section>
+
+    <section id="preset" hidden>
+      <div class="screen">
+        <div class="pnum" id="pnum">–</div>
+        <div><div class="pname" id="pname"></div><div class="pstate" id="pstate"></div></div>
+      </div>
+      <div class="chain" id="chain" role="list" aria-label="Signal chain"></div>
+      <div class="editor" id="editor"></div>
+    </section>
+  </main>
+</div>
+
+<footer>
+  <span id="fw"></span>
+  <span class="spacer"></span>
+  <button class="linkish" id="logBtn" aria-expanded="false">Show traffic</button>
+  <a href="https://github.com/maarthome/mooer-ge100pro/blob/GE100_MOD/CREDITS.md" target="_blank" rel="noopener">Credits</a>
+  <button class="btn primary" id="saveBtn" disabled>Save</button>
+</footer>
+
+<pre class="log" id="log" aria-live="off"></pre>
+<div class="toast" id="toast" role="status"></div>
+
+<dialog id="saveDlg">
+  <form method="dialog">
+    <h3 id="saveTitle">Save preset</h3>
+    <p class="note" id="saveText"></p>
+    <label for="saveName">Name (up to 16 characters)</label>
+    <input id="saveName" maxlength="16" autocomplete="off">
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn danger" value="save" id="saveConfirm">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="discardDlg">
+  <form method="dialog">
+    <h3>Discard your changes?</h3>
+    <p class="note" id="discardText"></p>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel">Keep editing</button>
+      <button class="btn danger" value="discard">Discard changes</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="protocol.js"></script>
+<script>
+'use strict';
+const P = window.GE100;
+const $ = (id) => document.getElementById(id);
+
+const app = {
+  dev: null,
+  deframer: new P.Deframer(),
+  waiters: [],
+  sendChain: Promise.resolve(),
+  names: {},          // 1..150 -> name
+  state: null,        // last 0x12/0x15 payload (44 bytes)
+  preset: null,       // {preset, name, slots}
+  sel: null,          // selected slot index
+  pedalCursor: null,  // slot under the pedal's cursor
+  dirty: false,
+  busy: false,
+  showAll: false,
+  toSend: new Set(),       // slots with edits still to send
+  quietUntil: new Map(),   // slot -> time until which 0x27 echoes of our own edits are ignored
+};
+
+// ---------- transport ------------------------------------------------------------------
+function log(dir, f) {
+  const el = $('log');
+  const line = `${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload.slice(0, 48), (b) => b.toString(16).padStart(2, '0')).join(' ')}${f.payload.length > 48 ? ' …' : ''}`;
+  const span = document.createElement('div');
+  if (dir === 'host') span.className = 'h';
+  span.textContent = line;
+  el.appendChild(span);
+  while (el.childNodes.length > 400) el.removeChild(el.firstChild);
+  if (el.classList.contains('open')) el.scrollTop = el.scrollHeight;
+}
+
+function send(cmd, payload = []) {
+  log('host', { cmd, payload: Uint8Array.from(payload) });
+  const reports = P.buildReports(cmd, payload);
+  app.sendChain = app.sendChain.then(async () => {
+    for (const r of reports) await app.dev.sendReport(0, r);
+  }).catch((e) => fail(e));
+  return app.sendChain;
+}
+
+function waitFor(cmd, ms = 1500) {
+  return new Promise((resolve, reject) => {
+    const w = { cmd, resolve, timer: setTimeout(() => { app.waiters.splice(app.waiters.indexOf(w), 1); reject(new Error(`no reply 0x${cmd.toString(16)} from the pedal`)); }, ms) };
+    app.waiters.push(w);
+  });
+}
+
+async function request(cmd, payload, reply, ms) {
+  const p = waitFor(reply, ms);
+  await send(cmd, payload);
+  return p;
+}
+
+function onReport(ev) {
+  const r = new Uint8Array(ev.data.buffer, ev.data.byteOffset, ev.data.byteLength);
+  for (const f of app.deframer.feed(r)) {
+    log('pedal', f);
+    if (!f.crcOk) continue;
+    const i = app.waiters.findIndex((w) => w.cmd === f.cmd);
+    if (i >= 0) { const [w] = app.waiters.splice(i, 1); clearTimeout(w.timer); w.resolve(f); }
+    handle(f);
+  }
+}
+
+// ---------- pedal -> editor --------------------------------------------------------------
+function handle(f) {
+  const R = P.REPLY, p = f.payload;
+  if (f.cmd === R.STATE || f.cmd === R.STATUS) {
+    app.state = Uint8Array.from(p);
+    if (f.cmd === R.STATUS && app.preset && p[0] !== app.preset.preset) markCurrent(p[0]);
+  } else if (f.cmd === R.PRESET_DUMP) {
+    app.preset = P.parsePreset(p);
+    app.dirty = false;
+    app.toSend.clear();
+    app.quietUntil.clear();
+    if (app.sel !== null && !app.preset.slots[app.sel].used) app.sel = null;
+    if (app.sel === null) app.sel = (app.preset.slots.find((s) => s.used) || {}).index ?? null;
+    renderPreset();
+  } else if (f.cmd === R.SLOT && app.preset) {
+    const s = P.parseSlot(p[0], p.subarray(1, 51));
+    if (!((app.quietUntil.get(s.index) || 0) > Date.now())) {   // ignore echoes of our own knob edits
+      app.preset.slots[s.index] = s;
+      app.dirty = true;
+      renderPreset();
+    }
+  } else if (f.cmd === R.NAV) {
+    app.pedalCursor = p[1];
+    renderChain();
+  }
+}
+
+// ---------- connect ------------------------------------------------------------------
+async function connect() {
+  try {
+    const [dev] = await navigator.hid.requestDevice({ filters: [{ vendorId: P.VENDOR_ID, productId: P.PRODUCT_ID }] });
+    if (!dev) return;
+    if (!dev.opened) await dev.open();
+    app.dev = dev;
+    dev.addEventListener('inputreport', onReport);
+    setConn('Reading the pedal…', 'on');
+    $('connectBtn').disabled = true;
+    const info = P.parseDeviceInfo((await request(P.CMD.DEVICE_INFO, [0], P.REPLY.DEVICE_INFO)).payload);
+    $('fw').textContent = `${info.name} firmware ${info.firmware}`;
+    await request(P.CMD.STATE, [], P.REPLY.STATE);
+    for (let a = 1; a <= 150; a += 30) {
+      const n = P.parseNames((await request(P.CMD.NAMES, [a, a + 29], P.REPLY.NAMES)).payload);
+      n.names.forEach((s, i) => { app.names[n.first + i] = s; });
+    }
+    renderList();
+    await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
+    $('intro').hidden = true;
+    $('preset').hidden = false;
+    $('search').disabled = false;
+    setConn('Connected', 'ok');
+    $('connectBtn').hidden = true;
+  } catch (e) {
+    fail(e);
+    $('connectBtn').disabled = false;
+  }
+}
+
+function setConn(text, led) {
+  $('connText').textContent = text;
+  $('connLed').className = 'led' + (led ? ' ' + led : '');
+}
+
+function disconnected() {
+  app.dev = null;
+  setConn('Not connected', '');
+  $('connectBtn').disabled = false;
+  $('connectBtn').hidden = false;
+  $('saveBtn').disabled = true;
+  toast('The pedal was disconnected', true);
+}
+
+// ---------- editor -> pedal ------------------------------------------------------------
+async function selectPreset(n) {
+  if (app.busy || !app.dev || (app.preset && n === app.preset.preset && !app.dirty)) return;
+  if (app.dirty && !(await askDiscard())) return;
+  app.busy = true;
+  renderList();
+  try {
+    const st = (await request(P.CMD.STATE, [], P.REPLY.STATE)).payload;
+    const next = Uint8Array.from(st);
+    next[0] = n;
+    const dump = waitFor(P.REPLY.PRESET_DUMP, 2000);
+    const ack = await request(P.CMD.SET_STATE, Array.from(next), P.REPLY.SET_STATE);
+    if (ack.payload[0] !== 1) throw new Error('the pedal refused the preset change');
+    await dump.catch(async () => {           // pedal did not push the new preset: ask for it
+      await new Promise((r) => setTimeout(r, 300));
+      await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
+    });
+  } catch (e) { fail(e); }
+  app.busy = false;
+  renderList();
+}
+
+let sendTimer = null;
+/** Queue a SET_SLOT for this slot. At most one every 25 ms per burst, always with the latest values,
+ *  like Mooer Studio while a knob is dragged. expectEcho: apply the pedal's 0x27 answer (model change). */
+function pushSlot(index, expectEcho = false) {
+  app.toSend.add(index);
+  if (expectEcho) app.quietUntil.delete(index);
+  else app.quietUntil.set(index, Date.now() + 500);
+  app.dirty = true;
+  renderState();
+  if (sendTimer) return;
+  sendTimer = setTimeout(() => {
+    sendTimer = null;
+    for (const i of app.toSend) send(P.CMD.SET_SLOT, [i, ...P.encodeSlot(app.preset.slots[i])]);
+    app.toSend.clear();
+  }, 25);
+}
+
+function openPage(slot) {
+  if (!app.dev || !slot.used) return;
+  send(P.CMD.OPEN_PAGE, [6 + slot.type, slot.index]);
+}
+
+async function save() {
+  if (!app.preset || !app.dev) return;
+  const n = app.preset.preset;
+  $('saveTitle').textContent = `Save to preset ${n}`;
+  $('saveText').textContent = `This permanently replaces what is stored in preset ${n} ("${app.names[n] || app.preset.name}") with the sound you hear now.`;
+  $('saveName').value = app.preset.name;
+  const dlg = $('saveDlg');
+  dlg.showModal();
+  const result = await new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue), { once: true }));
+  if (result !== 'save') return;
+  const name = $('saveName').value.trim() || app.preset.name;
+  try {
+    const ack = await request(P.CMD.SAVE, [n, ...P.nameField(name)], P.REPLY.SAVE, 3000);
+    if (ack.payload[0] !== 1) throw new Error('the pedal did not confirm the save');
+    app.names[n] = name;
+    app.preset.name = name;
+    app.dirty = false;
+    renderPreset(); renderList();
+    toast(`Saved preset ${n}`);
+  } catch (e) { fail(e); }
+}
+
+function askDiscard() {
+  const dlg = $('discardDlg');
+  $('discardText').textContent = `Preset ${app.preset.preset} has changes that are not saved. Switching presets discards them.`;
+  dlg.showModal();
+  return new Promise((r) => dlg.addEventListener('close', () => r(dlg.returnValue === 'discard'), { once: true }));
+}
+
+// ---------- rendering --------------------------------------------------------------------
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const ul = $('plist');
+  ul.textContent = '';
+  for (let n = 1; n <= 150; n++) {
+    const nm = app.names[n];
+    if (nm === undefined) continue;
+    if (q && !nm.toLowerCase().includes(q) && String(n) !== q) continue;
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    if (nm === 'EMPTY') b.classList.add('empty');
+    if (app.preset && app.preset.preset === n) { b.classList.add('cur'); b.setAttribute('aria-current', 'true'); }
+    b.disabled = app.busy;
+    b.innerHTML = `<span class="num">${n}</span><span class="nm"></span>`;
+    b.querySelector('.nm').textContent = nm === 'EMPTY' ? 'Empty' : nm;
+    b.addEventListener('click', () => selectPreset(n));
+    li.appendChild(b);
+    ul.appendChild(li);
+  }
+}
+
+function markCurrent(n) {
+  if (app.preset) app.preset.preset = n;
+  renderList();
+}
+
+function renderState() {
+  const el = $('pstate');
+  el.textContent = app.dirty ? 'Changed, not saved' : 'Saved on the pedal';
+  el.className = 'pstate' + (app.dirty ? ' dirty' : '');
+  $('saveBtn').disabled = !app.dev || !app.preset;
+  $('saveBtn').textContent = app.preset ? `Save to preset ${app.preset.preset}` : 'Save';
+}
+
+function renderPreset() {
+  if (!app.preset) return;
+  $('pnum').textContent = app.preset.preset;
+  $('pname').textContent = app.preset.name;
+  renderState();
+  renderChain();
+  renderEditor();
+  renderList();
+}
+
+const typeName = (t) => P.TYPE_NAMES[t] || `Type ${t}`;
+
+function renderChain() {
+  const c = $('chain');
+  if (!app.preset) return;
+  c.textContent = '';
+  for (const s of app.preset.slots) {
+    const b = document.createElement('button');
+    b.className = 'slot' + (s.used ? '' : ' vacant') + (s.used && !s.enabled ? ' off' : '') + (app.sel === s.index ? ' sel' : '') + (app.pedalCursor === s.index ? ' pedalcursor' : '');
+    b.setAttribute('role', 'listitem');
+    b.innerHTML = `<span class="pos">${s.index + 1}</span><span class="stype"></span><span class="smodel"></span>${s.used ? `<span class="led${s.enabled ? ' on' : ''}" aria-hidden="true"></span>` : ''}<span class="cursor" aria-hidden="true"></span>`;
+    b.querySelector('.stype').textContent = s.used ? typeName(s.type) : 'Empty';
+    b.querySelector('.smodel').textContent = s.used ? `Model ${s.model}${s.enabled ? '' : ', off'}` : '';
+    b.setAttribute('aria-label', s.used ? `Slot ${s.index + 1}: ${typeName(s.type)}, model ${s.model}, ${s.enabled ? 'on' : 'off'}` : `Slot ${s.index + 1}: empty`);
+    if (s.used) b.addEventListener('click', () => { app.sel = s.index; renderChain(); renderEditor(); openPage(s); });
+    else b.disabled = true;
+    c.appendChild(b);
+  }
+}
+
+function knobMax(v) { return v > 2500 ? 20000 : v > 100 ? 2500 : 100; }
+
+function renderEditor() {
+  const ed = $('editor');
+  ed.textContent = '';
+  const s = app.sel !== null && app.preset ? app.preset.slots[app.sel] : null;
+  if (!s || !s.used) { ed.innerHTML = '<p class="note">Pick a slot in the chain to edit it.</p>'; return; }
+  const head = document.createElement('div');
+  head.className = 'ehead';
+  head.innerHTML = `<h2></h2>
+    <button class="switch" aria-pressed="${s.enabled}"><span class="led${s.enabled ? ' on' : ''}"></span>${s.enabled ? 'On' : 'Off'}</button>
+    <span class="stepper" role="group" aria-label="Model"><button aria-label="Previous model">−</button><output>Model ${s.model}</output><button aria-label="Next model">+</button></span>`;
+  head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
+  head.querySelector('.switch').addEventListener('click', () => { s.enabled = !s.enabled; pushSlot(s.index); renderChain(); renderEditor(); });
+  const [prev, next] = head.querySelectorAll('.stepper button');
+  prev.addEventListener('click', () => changeModel(s, -1));
+  next.addEventListener('click', () => changeModel(s, +1));
+  ed.appendChild(head);
+
+  let last = 0;
+  s.params.slice(0, 10).forEach((v, i) => { if (v) last = i + 1; });
+  const count = app.showAll ? 10 : Math.max(last, 1);
+  const knobs = document.createElement('div');
+  knobs.className = 'knobs';
+  for (let i = 0; i < count; i++) knobs.appendChild(knob(s, i));
+  ed.appendChild(knobs);
+
+  const foot = document.createElement('p');
+  foot.className = 'note';
+  foot.innerHTML = `Knob names and ranges are not known yet: knobs are numbered as on the pedal's screen. <button class="linkish">${app.showAll ? 'Show only used knobs' : 'Show all 10 knobs'}</button>`;
+  foot.querySelector('button').addEventListener('click', () => { app.showAll = !app.showAll; renderEditor(); });
+  ed.appendChild(foot);
+}
+
+function changeModel(s, d) {
+  const m = s.model + d;
+  if (m < 0 || m > 99) return;
+  s.model = m;
+  pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
+  renderChain(); renderEditor();
+}
+
+function knob(s, i) {
+  const wrap = document.createElement('div');
+  wrap.className = 'knob';
+  wrap.tabIndex = 0;
+  wrap.setAttribute('role', 'slider');
+  const max = knobMax(s.params[i]);
+  wrap.setAttribute('aria-label', `Knob ${i + 1}`);
+  wrap.setAttribute('aria-valuemin', '0');
+  wrap.setAttribute('aria-valuemax', String(max));
+  wrap.innerHTML = `<svg viewBox="0 0 84 84" aria-hidden="true">
+      <path class="track" d="" fill="none" stroke="#56616d" stroke-width="5" stroke-linecap="round"/>
+      <path class="arc" d="" fill="none" stroke="#ffb23e" stroke-width="5" stroke-linecap="round"/>
+      <circle class="cap" cx="42" cy="42" r="25" fill="#2e3742" stroke="#556271" stroke-width="1"/>
+      <line class="ptr" x1="42" y1="42" x2="42" y2="22" stroke="#edf0f2" stroke-width="3" stroke-linecap="round"/>
+    </svg><div class="val"></div><div class="lbl">Knob ${i + 1}</div>`;
+  const polar = (a, r) => [42 + r * Math.cos(a), 42 + r * Math.sin(a)];
+  const arc = (a0, a1) => { const [x0, y0] = polar(a0, 36), [x1, y1] = polar(a1, 36); return `M${x0.toFixed(2)} ${y0.toFixed(2)} A36 36 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
+  const A0 = Math.PI * 0.75, SPAN = Math.PI * 1.5;
+  wrap.querySelector('.track').setAttribute('d', arc(A0, A0 + SPAN));
+  const draw = () => {
+    const v = s.params[i], t = Math.min(v / max, 1);
+    wrap.querySelector('.arc').setAttribute('d', t > 0.001 ? arc(A0, A0 + SPAN * t) : '');
+    const [x, y] = polar(A0 + SPAN * t, 20);
+    const p = wrap.querySelector('.ptr'); p.setAttribute('x2', x.toFixed(2)); p.setAttribute('y2', y.toFixed(2));
+    wrap.querySelector('.val').textContent = v;
+    wrap.setAttribute('aria-valuenow', String(v));
+  };
+  const set = (v) => {
+    v = Math.max(0, Math.min(max, Math.round(v)));
+    if (v === s.params[i]) return;
+    s.params[i] = v; draw(); pushSlot(s.index);
+  };
+  draw();
+  const svg = wrap.querySelector('svg');
+  svg.addEventListener('pointerdown', (e) => {
+    svg.setPointerCapture(e.pointerId);
+    const y0 = e.clientY, v0 = s.params[i];
+    const move = (ev) => set(v0 + ((y0 - ev.clientY) / (ev.shiftKey ? 600 : 160)) * max);
+    const up = () => { svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); };
+    svg.addEventListener('pointermove', move);
+    svg.addEventListener('pointerup', up);
+  });
+  wrap.addEventListener('wheel', (e) => { e.preventDefault(); set(s.params[i] + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1) * (max > 100 ? 10 : 1)); }, { passive: false });
+  wrap.addEventListener('keydown', (e) => {
+    const step = max > 100 ? 10 : 1;
+    const k = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: step * 10, PageDown: -step * 10 }[e.key];
+    if (k) { e.preventDefault(); set(s.params[i] + k); }
+    else if (e.key === 'Home') { e.preventDefault(); set(0); }
+    else if (e.key === 'End') { e.preventDefault(); set(max); }
+    else if (e.key === 'Enter') { e.preventDefault(); edit(); }
+  });
+  const edit = () => {
+    const val = wrap.querySelector('.val');
+    const inp = document.createElement('input');
+    inp.type = 'number'; inp.min = 0; inp.max = max; inp.value = s.params[i];
+    inp.setAttribute('aria-label', `Knob ${i + 1} value`);
+    val.replaceWith(inp); inp.focus(); inp.select();
+    const done = (ok) => { if (ok) set(Number(inp.value)); inp.replaceWith(val); draw(); wrap.focus(); };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
+    inp.addEventListener('blur', () => done(true), { once: true });
+  };
+  wrap.querySelector('.val').addEventListener('dblclick', edit);
+  return wrap;
+}
+
+// ---------- misc --------------------------------------------------------------------------
+let toastTimer;
+function toast(msg, err) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 3500);
+}
+
+function fail(e) {
+  console.error(e);
+  toast(e && e.message ? e.message.charAt(0).toUpperCase() + e.message.slice(1) : 'Something went wrong talking to the pedal', true);
+}
+
+$('connectBtn').addEventListener('click', connect);
+$('saveBtn').addEventListener('click', save);
+$('search').addEventListener('input', renderList);
+$('logBtn').addEventListener('click', () => {
+  const open = $('log').classList.toggle('open');
+  $('logBtn').textContent = open ? 'Hide traffic' : 'Show traffic';
+  $('logBtn').setAttribute('aria-expanded', String(open));
+});
+if (!('hid' in navigator)) { $('noHid').hidden = false; $('connectBtn').disabled = true; }
+else navigator.hid.addEventListener('disconnect', (e) => { if (e.device === app.dev) disconnected(); });
+</script>
+</body>
+</html>

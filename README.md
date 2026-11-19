@@ -16,6 +16,12 @@ Unofficial: not affiliated with or endorsed by Mooer.
 
 Everything known so far, with what is verified and what is a guess: [PROTOCOL.md](PROTOCOL.md).
 
+## Editor
+
+A web page editor (WebHID) for Edge/Chrome on Windows 11, later also for Chromium on the Pi: open `web/index.html`, see
+[web/README.md](web/README.md). It selects presets, edits the 10-slot chain live (on/off, model, knobs) and saves only
+after you confirm.
+
 ## Quick start (Linux)
 
 Connect the pedal's **data** USB-C port. Allow access without root (members of `plugdev`, also over SSH):
@@ -130,10 +136,11 @@ PYTHONPATH=src python3 -m pytest -q
 | `captures/` | raw captures still being analysed |
 | `tests/fixtures/` | captures that back a verified fact |
 | `udev/` | udev rule |
+| `web/` | the web editor (`index.html`, `protocol.js`) |
 
 ## Credits
 
-`crc.py` and `framing.py` come from [fingerskier/Mooer_GE150_Pro_Li-IO](https://github.com/fingerskier/Mooer_GE150_Pro_Li-IO),
+See [CREDITS.md](CREDITS.md) for every project this work builds on. In short: `crc.py` and `framing.py` come from [fingerskier/Mooer_GE150_Pro_Li-IO](https://github.com/fingerskier/Mooer_GE150_Pro_Li-IO),
 `hid_win.py` from [atahan26/ge200-editor](https://github.com/atahan26/ge200-editor) (both MIT, see [NOTICE.md](NOTICE.md)). The protocol work builds on the published findings of the Mooer projects listed in
 [PROTOCOL.md §6](PROTOCOL.md#6-related-projects), in particular the Prime M2 research by andymann.
 
