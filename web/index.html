@@ -175,7 +175,8 @@
   footer { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--panel); border-top: 1px solid var(--edge); font-size: 0.8667rem; color: var(--dim); }
   footer a { color: var(--dim); }
   .spacer { flex: 1; }
-  .log { position: fixed; left: 16px; right: 16px; bottom: 56px; height: 40vh; z-index: 50; background: #222a33; border: 1px solid var(--edge); border-radius: 8px; overflow: auto; font: 12px/1.45 Consolas, "Cascadia Mono", monospace; padding: 8px 10px; white-space: pre; display: none; }
+  .log { position: fixed; left: 16px; right: 16px; bottom: 56px; height: 40vh; z-index: 50; background: #222a33; border: 1px solid var(--edge); border-radius: 8px; overflow: auto; font: 12px/1.45 Consolas, "Cascadia Mono", monospace; padding: 8px 10px; white-space: pre-wrap; display: none; }
+  .log div { padding-left: 4.6ch; text-indent: -4.6ch; overflow-wrap: anywhere; }
   .log.open { display: block; }
   .log .h { color: var(--led); }
 
@@ -642,7 +643,7 @@ const app = {
 // ---------- transport ------------------------------------------------------------------
 function log(dir, f) {
   const el = $('log');
-  const line = `${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload.slice(0, 64), (b) => b.toString(16).padStart(2, '0')).join(' ')}${f.payload.length > 64 ? ' …' : ''}`;
+  const line = `${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload, (b) => b.toString(16).padStart(2, '0')).join(' ')}`;   // the whole message, wrapped to the window width
   const span = document.createElement('div');
   if (dir === 'host') span.className = 'h';
   span.textContent = line;
