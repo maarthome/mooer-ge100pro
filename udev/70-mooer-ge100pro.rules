@@ -1,8 +1,1 @@
-# MOOER GE100 Pro / GE100 Pro Li (34db:0011): let the logged-in user use the
-# HID control channel without root.
-#
-#   sudo cp udev/70-mooer-ge100pro.rules /etc/udev/rules.d/
-#   sudo udevadm control --reload-rules && sudo udevadm trigger
-#
-# The file number must stay below 73 for the uaccess tag to take effect.
-SUBSYSTEM=="hidraw", ATTRS{idVendor}=="34db", ATTRS{idProduct}=="0011", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="34db", ATTRS{idProduct}=="0011", MODE="0660", GROUP="plugdev", TAG+="uaccess"
