@@ -1,26 +1,86 @@
 # mooer-ge100pro
 
-Reverse-engineering the USB control protocol of the **Mooer GE100 Pro / GE100 Pro Li** (USB `34db:0011`), with a
-Python library and a live decoder that runs on Linux (developed on a Raspberry Pi 5).
+An unofficial **editor for the Mooer GE100 Pro / GE100 Pro Li** multi-effects pedal, plus the reverse-engineered USB
+protocol it is built on. It runs in Chrome, Edge or Brave (WebHID) on Windows 11, or as a standalone Windows program,
+and also works on a Raspberry Pi.
 
-Unofficial: not affiliated with or endorsed by Mooer.
+Unofficial: not affiliated with or endorsed by Mooer. Close Mooer Studio while you use it: only one program can talk to
+the pedal at a time.
 
-## Status
+![The GE100 Pro editor: preset list, the 10-block chain and the amp's knobs](docs/images/editor.png)
 
-- **Working:** framing and CRC; decoding of the pedal's pushes and replies (state, chain slots, presets with their 10
-  slots, preset names, device info); the read requests Mooer Studio sends at start-up (`python3 -m ge100pro.probe`);
-  reading and filtering Wireshark/USBPcap captures. The command set belongs to the Prime M2 family.
-- **Decoded from Mooer Studio, not sent by this code yet:** select preset (`13`), live slot edit (`25`), open edit
-  page (`41`), save (`2f`). Sending is limited in code to the confirmed read requests.
-- **Runs on Linux and Windows.**
+## What the editor does
 
-Everything known so far, with what is verified and what is a guess: [PROTOCOL.md](PROTOCOL.md).
+- **Presets**: all 150 presets as on the pedal (01A … 50C), with search; switching asks to save unsaved changes.
+- **The chain**: the 10 blocks with their model and on/off LED, coloured per effect group. Drag a block to move it,
+  drop it on the bin to remove it, click **+** on an empty slot to add one.
+- **Knobs**: every model with its real knob names, ranges and units (dB, ms, Hz, sub-divisions), changed live on the
+  pedal while you turn them.
+- **Models**: a point-and-click list per block with the pedal's own numbering and names (`28 | MARKV DS`).
+- **Your own captures and IRs**: load NAM amp captures (as .gnr) and cab IRs (.wav) into the user slots with **+**,
+  replace or delete them with **+** / **−**, and use them in a preset.
+- **Save** to the current preset or any other one, with its name.
+- **System**: input and OTG level, brightness, global EQ, spill over, cab sim left/right, Bluetooth.
+- **EXP pedal**: which block and parameter the expression pedal controls; the EXP volume pedal with min and max.
+- **Header**: rhythm BPM and volume, cab sim L/R switches, the EXP assignment.
+- **Settings**: text sizes and colours for every part, a colour per effect group, saved to `settings.js`.
+- **Traffic panel**: every message to and from the pedal in hex, for curious people and for debugging.
 
-## Editor
+![Amp model list with the user capture slots and their + and − buttons](docs/images/model-list.png)
 
-A web page editor (WebHID) for Edge/Chrome on Windows 11, later also for Chromium on the Pi: open `web/index.html`, see
-[web/README.md](web/README.md). It selects presets, edits the 10-slot chain live (on/off, model, knobs with their
-names and units) and saves only after you confirm.
+| System settings | EXP pedal |
+|---|---|
+| ![System window](docs/images/system.png) | ![EXP pedal window](docs/images/exp.png) |
+
+## Getting started
+
+**In the browser (Windows, Linux):** clone the repository (branch `GE100_MOD`), connect the pedal's **data** USB-C
+port, and open `web/index.html` in Chrome, Edge or Brave. Click **Connect** once and pick the GE100 Pro; after that the
+editor connects by itself.
+
+```powershell
+git clone -b GE100_MOD https://github.com/maarthome/mooer-ge100pro.git
+```
+
+**As a Windows program:** build `GE100Pro_Editor.exe` once (needs Python 3.9+; see
+[Building the executables](docs/Building%20the%20executables.docx)):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build_editor_exe.ps1
+```
+
+**From the code, also on a Raspberry Pi** (opens Chromium; on Linux first install the udev rule below):
+
+```bash
+PYTHONPATH=src python3 -m ge100pro.app
+```
+
+**NAM captures** have to be converted to .gnr first, with Mooer's own converter that comes with Mooer Studio:
+`tools/nam_to_gnr.py` (or `NAM_to_GNR.exe`) does that for one file or a whole folder, see
+[How to convert NAM to GNR](docs/How%20to%20convert%20NAM%20to%20GNR.docx).
+
+More about the editor: [web/README.md](web/README.md).
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [How to convert NAM to GNR](docs/How%20to%20convert%20NAM%20to%20GNR.docx) | converting captures and loading them into the pedal |
+| [Building the executables](docs/Building%20the%20executables.docx) | building the two .exe files and which files they need |
+| [GE100 Pro editor: code and protocol](docs/GE100%20Pro%20editor%20-%20code%20and%20protocol.docx) | how the code is built, how to develop it, the USB protocol in hex |
+| [PROTOCOL.md](PROTOCOL.md) | the detailed protocol notes, with what is verified and what is a guess |
+
+## The protocol in short
+
+USB HID `34db:0011`, 64-byte reports; frames `AA 55 | length | command | payload | CRC-16/GSM`; a reply's command is
+the request's + 1 (the Mooer Prime M2 command family). Everything was found by recording Mooer Studio with Wireshark
+and USBPcap and decoding the recordings; commands are only sent once they have been seen from Mooer Studio, because
+guessed ones can lock the pedal up. Details: [PROTOCOL.md](PROTOCOL.md).
+
+## Python tools
+
+The Python package in `src/ge100pro` decodes the pedal's messages live on Linux (developed on a Raspberry Pi 5) and
+reads Wireshark/USBPcap recordings; it also powers the desktop app.
 
 ## Quick start (Linux)
 
