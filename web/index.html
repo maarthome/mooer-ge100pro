@@ -359,8 +359,30 @@ function slotText(type, model) {
   const names = info.user_list !== undefined && app.userNames[info.user_list];
   return (names && names[model - info.models.length + 1]) || 'MEMORY';
 }
+/** On the wire a user capture / IR is model 120 with its name in the text field (seen in a real preset:
+ *  amp 120 "Clean_9b5eltcb", cab 120 "1971 Fender Twin R"). Sending the list position as the model number
+ *  instead made the pedal show Chinese characters and drop off USB. In the editor a user slot u is
+ *  numbered factory count + u - 1 (as the pedal lists it); these two functions convert. */
+const USER_MODEL = 120;
+function uiModel(s) {
+  const info = typeInfo(s.type);
+  if (s.model !== USER_MODEL || !info.user_slots) return s.model;
+  const names = (info.user_list !== undefined && app.userNames[info.user_list]) || {};
+  for (let u = 1; u <= info.user_slots; u++) {
+    if (names[u] && names[u].slice(0, 20) === s.text) return info.models.length + u - 1;
+  }
+  return s.model;   // a capture not in the list (yet)
+}
+/** Put editor model m into slot s: model number, text field and word 11 as the pedal stores them. */
+function setWireModel(s, m) {
+  const info = typeInfo(s.type);
+  const user = m >= info.models.length;
+  s.model = user ? USER_MODEL : m;
+  s.text = slotText(s.type, m).slice(0, 20);
+  s.word11 = user && s.type === 3 ? 0x0101 : 1;   // user IR slots hold 0x0101 there, everything else 1
+}
 /** Model as the pedal shows it, e.g. "01 | 65 US DX"; user slots show the capture name read from the pedal. */
-function modelLabel(type, model) {
+function modelLabel(type, model, text) {
   const info = typeInfo(type), n = String(model + 1).padStart(2, '0');
   if (model < info.models.length) return `${n} | ${info.models[model]}`;
   const u = model - info.models.length + 1;
@@ -368,6 +390,7 @@ function modelLabel(type, model) {
     const name = info.user_list !== undefined && app.userNames[info.user_list] && app.userNames[info.user_list][u];
     return `${n} | ${name || `User ${u} (empty)`}`;
   }
+  if (model === USER_MODEL && text) return `U | ${text}`;
   return `${n} | Model ${model}`;
 }
 
@@ -675,7 +698,7 @@ function renderChain() {
     card.setAttribute('role', 'listitem');
     card.dataset.index = s.index;
     if (s.used) card.style.setProperty('--g', groupColour(s.type));
-    const label = s.used ? modelLabel(s.type, s.model) : '';
+    const label = s.used ? modelLabel(s.type, uiModel(s), s.text) : '';
     card.innerHTML = `<button class="main"><span class="pos"></span><span class="snum"></span><span class="smodel"></span></button>${s.used ? `<button class="ledbtn"><span class="led${s.enabled ? ' on' : ''}"></span></button>` : '<button class="addbtn" type="button">+</button>'}<span class="cursor" aria-hidden="true"></span>`;
     const main = card.querySelector('.main');
     card.querySelector('.pos').textContent = `${s.index + 1}  ${s.used ? typeName(s.type) : ''}`;
@@ -789,7 +812,7 @@ function pickBlock(index) {
     const t = Number(tSel.value);
     mSel.textContent = '';
     for (let m = 0; m < modelCount(t); m++) {
-      if (!modelSelectable(t, m)) continue;   // empty user slots are left out
+      if (m >= typeInfo(t).models.length) break;   // factory models only: an add can't carry a capture name
       const o = document.createElement('option');
       o.value = m; o.textContent = modelLabel(t, m);
       mSel.appendChild(o);
@@ -920,24 +943,25 @@ function renderEditor() {
     <select class="model" aria-label="Model"></select>`;
   const sel = head.querySelector('select.model');
   for (let m = 0; m < modelCount(s.type); m++) {
-    if (!modelSelectable(s.type, m) && m !== s.model) continue;   // empty user slots are left out
+    if (!modelSelectable(s.type, m) && m !== uiModel(s)) continue;   // empty user slots are left out
     const o = document.createElement('option');
     o.value = m; o.textContent = modelLabel(s.type, m);
     sel.appendChild(o);
   }
-  if (s.model >= modelCount(s.type)) {          // a model number the editor doesn't know: still show it
+  const cur = uiModel(s);
+  if (cur >= modelCount(s.type)) {          // a model the editor doesn't know: still show it
     const o = document.createElement('option');
-    o.value = s.model; o.textContent = modelLabel(s.type, s.model) + ' (unknown)';
+    o.value = cur; o.textContent = modelLabel(s.type, cur, s.text) + (cur === USER_MODEL ? '' : ' (unknown)');
     sel.appendChild(o);
   }
-  sel.value = String(s.model);
+  sel.value = String(cur);
   sel.addEventListener('change', () => { if (sel.value !== '') setModel(s, Number(sel.value)); });
   head.querySelector('h2').textContent = `Slot ${s.index + 1}: ${typeName(s.type)}`;
   head.style.setProperty('--g', groupColour(s.type));
   head.querySelector('.switch').addEventListener('click', () => toggleSlot(s));
   ed.appendChild(head);
 
-  const spec = knobsFor(s.type, s.model);
+  const spec = knobsFor(s.type, uiModel(s));
   const knobs = document.createElement('div');
   knobs.className = 'knobs';
   if (spec) spec.forEach((k, i) => knobs.appendChild(knob(s, i, k)));
@@ -958,9 +982,8 @@ function renderEditor() {
 }
 
 function setModel(s, m) {
-  if (m < 0 || m >= modelCount(s.type) || m === s.model || !modelSelectable(s.type, m)) return;
-  s.model = m;
-  s.text = slotText(s.type, m);
+  if (m < 0 || m >= modelCount(s.type) || m === uiModel(s) || !modelSelectable(s.type, m)) return;
+  setWireModel(s, m);
   pushSlot(s.index, true);   // the pedal answers with a 0x27 holding the model's values
   renderChain(); renderEditor();
 }

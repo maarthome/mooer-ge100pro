@@ -105,7 +105,7 @@
     put(4, slot.enabled ? 1 : 0);
     put(6, slot.model);
     slot.params.forEach((v, i) => put(8 + 2 * i, v));
-    put(8 + 2 * 10, 1);
+    put(8 + 2 * 10, slot.word11 !== undefined ? slot.word11 : 1);
     // bytes 30-49: "MEMORY" for a factory model, the capture / IR name for a user slot
     if (typeof slot.text === 'string') {
       r.fill(0, 30, 50);

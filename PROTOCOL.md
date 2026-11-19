@@ -143,9 +143,9 @@ category's list: model 0 is shown on the pedal as `01`. All names and knobs are 
 | Type | Category | Models | Knobs (examples) |
 |---|---|---|---|
 | 0 | Pre FX (wah, compressors, limiter, reducer) | 15 | CRY WAH: Q, Position, Peak, Level |
-| 1 | Drive | 35 + 10 user captures (36–45) | Volume, Tone, Gain |
-| 2 | Amp | 72 + 20 user captures (73–92) | GAIN, BASS, MID, TREBLE, PRES, MST |
-| 3 | Cab | 67 + 20 user IRs (68–87) | LOW CUT, HIGH CUT, ROOM |
+| 1 | Drive | 35 + 10 user captures (shown as 36–45; on the wire model 120 + name) | Volume, Tone, Gain |
+| 2 | Amp | 72 + 20 user captures (shown as 73–92; on the wire model 120 + name) | GAIN, BASS, MID, TREBLE, PRES, MST |
+| 3 | Cab | 67 + 20 user IRs (shown as 68–87; on the wire model 120 + name) | LOW CUT, HIGH CUT, ROOM |
 | 4 | Noise reduction | 3 | NOISE KILLER: THRES; INTEL REDUCER: SENS; NOISE GATE: ATTACK, RELEASE, THRES |
 | 5 | EQ | 6 | MOOER HM: 80Hz, 240Hz, 750Hz, 2.2KHz, 6.6KHz; CUSTOM EQ: Gain/Freq × 3 |
 | 6 | Modulation | 27 | PHASER: Rate, Level, Depth; PITCH SHIFT: Pitch, Mix, Tone |
@@ -197,21 +197,24 @@ Note: the Prime M2 encodes a synced delay time as `0x8000 | index` instead; the 
 ### `66` user capture list [V for type 2]
 
 Entries of 29 bytes: `type, index (u16), used (1/0), flag (2 if used), name (24 bytes)`. Type 2 = the 20 user amp
-slots, which are amp models 73–92; in this pedal 1–4 hold NAM/MNRS captures ("ReverPlex CLN 1_z2", "Clean_9b5eltcb",
+slots, shown as amp models 73–92; in this pedal 1–4 hold NAM/MNRS captures ("ReverPlex CLN 1_z2", "Clean_9b5eltcb",
 …). The same request with another type byte (`python -m ge100pro.lists --yes`, 2026-11-19) [V]:
 
 | Type | Reply |
 |---|---|
-| 1 drive | 20 entries: user drive captures, here "1971 Fender Twin R", "Bogie412CB65_CG_16" (drive models 36–45; the specs and the device info say 10 slots) |
-| 2 amp | 20 entries: user amp captures (amp models 73–92) |
-| 3 cab | 20 entries: user IR slots (cab models 68–87), all empty here |
+| 1 | 20 entries: the **user cab IRs**, here "1971 Fender Twin R", "Bogie412CB65_CG_16" (a cab slot of a real preset used "1971 Fender Twin R") [V] |
+| 2 | 20 entries: user amp captures [V] |
+| 3 | 20 entries, all empty here: by elimination the user drive captures (10 per the specs) [H] |
 | 0, 4–8 | `66` with an empty payload |
 
 **The pedal does not send factory model names**: those come from the manual (`models.json`). The 20-byte text field
-of a slot record holds the name of the capture in use ("1971 Fender Twin R" appeared there) or `MEMORY`.
-A `25` that changes the model must also set this field (`MEMORY` for a factory model, the capture name for a user
-slot): changing an amp model while keeping the old text, or picking an empty user slot, made the pedal show a garbage
-amp name and drop off USB until it was switched off and on (2026-11-19). Mooer Studio also sends the new model's default
+of a slot record holds the name of the capture in use or `MEMORY`.
+
+**A user capture / IR in a slot is model 120 (0x78) with its name in the text field**, not "factory count + slot"
+[V, capture1: amp `120 "Clean_9b5eltcb"`, cab `120 "1971 Fender Twin R"`]. Word 11 is `0x0001` for a user amp and
+`0x0101` for a user IR there. The "73–92" numbers in the manual are only display numbers. Sending a `25` with model
+72–91 (the list position) made the pedal show Chinese characters or another type's model name ("01: 3 BANDS EQ") and
+drop off USB until it was switched off and on (2026-11-19). Mooer Studio also sends the new model's default
 knob values with a model change; the editor keeps the old values and takes the pedal's `27` answer.
 
 ## 5. Commands that change the pedal

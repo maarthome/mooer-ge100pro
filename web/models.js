@@ -321,7 +321,7 @@ window.GE100_MODELS = {
     "BE OD"
    ],
    "user_slots": 10,
-   "user_list": 1,
+   "user_list": 3,
    "knobs": [
     [
      {
@@ -1008,7 +1008,7 @@ window.GE100_MODELS = {
     "CALI PH810",
     "HNK 115"
    ],
-   "user_list": 3,
+   "user_list": 1,
    "knobs_all": [
     {
      "name": "LOW CUT",

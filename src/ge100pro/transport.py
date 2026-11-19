@@ -165,5 +165,5 @@ class GE100Pro:
 
         Same request as Mooer Studio's (entries 1..20) with another type; answered on firmware V1.3.3."""
         if slot_type not in (1, 2, 3):
-            raise ValueError("only types 1 (drive), 2 (amp) and 3 (cab) have user lists")
+            raise ValueError("only lists 1 (cab IRs), 2 (amp captures) and 3 (drive captures) exist")
         self.send(0x65, bytes([slot_type, 0x01, 0x00, 0x14, 0x00]))

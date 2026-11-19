@@ -93,10 +93,16 @@ def knob_text(knob: dict, value: int) -> str:
     return str(value)
 
 
-def model_label(slot_type: int, model: int) -> str:
+USER_MODEL = 120
+"""Model number of a user capture / IR on the wire; the capture's name is in the slot's text field."""
+
+
+def model_label(slot_type: int, model: int, text: str = "") -> str:
     """Model as the pedal shows it, e.g. '01 | 65 US DX' (the wire model number is 0-based)."""
     info = MODELS.get(str(slot_type), {"models": []})
     names = info["models"]
+    if model == USER_MODEL and info.get("user_slots"):
+        return f"U | {text or '?'}"
     if model < len(names):
         return f"{model + 1:02d} | {names[model]}"
     if model - len(names) < info.get("user_slots", 0):
@@ -152,7 +158,7 @@ class Slot:
     enabled: bool        # word 2                               [V]
     model: int           # word 3: model within the category    [H]
     params: list[int]    # 11 x u16 LE; knob N = params[N-1]    [V]
-    text: str            # 20 bytes, "MEMORY" so far            [?]
+    text: str            # 20 bytes: "MEMORY", or the capture / IR name when model is 120 [V]
 
     @property
     def type_name(self) -> str:
@@ -160,7 +166,7 @@ class Slot:
 
     @property
     def model_name(self) -> str:
-        return model_label(self.type, self.model)
+        return model_label(self.type, self.model, self.text)
 
     @property
     def knobs(self) -> list[tuple[str, str]]:
