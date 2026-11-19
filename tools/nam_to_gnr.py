@@ -61,24 +61,31 @@ def find_cli(given: str | None) -> Path:
     sys.exit("nam_to_gnr_cli.exe not found: give it with --cli <path>")
 
 
-def convert(cli: Path, src: Path, dst: Path) -> tuple[bool, str]:
-    """Run Mooer's converter for one file. Returns (ok, message)."""
+def convert(cli: Path, src: Path, dst: Path, on_progress=None) -> tuple[bool, str]:
+    """Run Mooer's converter for one file. on_progress(percent) gets the converter's own progress
+    (it prints JSON lines like {"progress_percent": 40}). Returns (ok, message)."""
     cli, src, dst = cli.resolve(), src.resolve(), dst.resolve()   # the converter runs in its own folder
     dst.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.run([str(cli), "--input", str(src), "--output", str(dst)], cwd=str(cli.parent),
-                          capture_output=True, text=True, errors="replace")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)               # no extra console window on Windows
+    proc = subprocess.Popen([str(cli), "--input", str(src), "--output", str(dst)], cwd=str(cli.parent),
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors="replace",
+                            creationflags=flags)
     status = None
-    for line in proc.stdout.splitlines():   # the converter prints JSON lines with status / progress
+    for line in proc.stdout:
         try:
             msg = json.loads(line)
         except ValueError:
             continue
+        if isinstance(msg.get("progress_percent"), (int, float)) and on_progress:
+            on_progress(max(0.0, min(100.0, float(msg["progress_percent"]))))
         if msg.get("status") in ("success", "failure"):
             status = msg
+    err = proc.stderr.read()
+    proc.wait()
     if status and status.get("status") == "failure":
         return False, f"converter failed (code {status.get('code')})"
     if proc.returncode != 0 and not status:
-        return False, f"converter exit code {proc.returncode}: {proc.stderr.strip()[:200]}"
+        return False, f"converter exit code {proc.returncode}: {err.strip()[:200]}"
     if not dst.is_file() or dst.stat().st_size == 0:
         return False, "no output file"
     return True, f"{dst.stat().st_size} bytes"
@@ -92,18 +99,19 @@ def existing_for(dst: Path) -> list[Path]:
     return sorted(p for p in dst.parent.iterdir() if p.is_file() and pat.match(p.name))
 
 
-def convert_job(cli: Path, src: Path, dst: Path, ask) -> tuple[str, str]:
+def convert_job(cli: Path, src: Path, dst: Path, ask, on_progress=None) -> tuple[str, str]:
     """Convert one file. If it was converted before, ask(src, old files) -> 'overwrite' or 'skip'.
     Overwrite: convert, then remove the old .gnr files. Returns (OK | FAIL | SKIP, message)."""
     old = existing_for(dst)
     if old and ask(src, old) == "skip":
         return "SKIP", f"already converted: {old[-1].name}"
-    ok, msg = convert(cli, src, dst)
+    ok, msg = convert(cli, src, dst, on_progress)
     if ok:
-        old = [o for o in old if o.resolve() != dst.resolve()]   # same name: already overwritten
+        if old:
+            msg += ", replaced the earlier version"
         for o in old:
-            o.unlink(missing_ok=True)
-        msg += ", replaced the earlier version"
+            if o.resolve() != dst.resolve():                          # same name: already overwritten
+                o.unlink(missing_ok=True)
     return ("OK" if ok else "FAIL"), msg
 
 
@@ -183,7 +191,7 @@ def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]], default: str | N
     frm.columnconfigure(0, weight=1); frm.rowconfigure(2, weight=1)
     status = ttk.Label(frm, text=f"0 of {len(jobs)}")
     status.grid(column=0, row=0, sticky="w")
-    bar = ttk.Progressbar(frm, length=520, maximum=len(jobs), mode="determinate")
+    bar = ttk.Progressbar(frm, length=520, maximum=100 * len(jobs), mode="determinate")
     bar.grid(column=0, row=1, sticky="ew", pady=8)
     log = Text(frm, width=100, height=16, wrap="none")
     log.grid(column=0, row=2, sticky="nsew")
@@ -223,11 +231,14 @@ def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]], default: str | N
     def work():
         for i, (src, dst) in enumerate(jobs, 1):
             ui(lambda i=i, src=src: status.config(text=f"{i} of {len(jobs)}: {src.name}"))
-            res, msg = convert_job(cli, src, dst, asker)
+            base = 100 * (i - 1)
+            def show(pct, i=i, src=src, base=base):
+                ui(lambda: (bar.config(value=base + pct), status.config(text=f"{i} of {len(jobs)}: {src.name}  {pct:.0f}%")))
+            res, msg = convert_job(cli, src, dst, asker, show)
             result["failed"] += res == "FAIL"
             line = f"{res:<4} {src}  ->  {dst}  ({msg})\n"
             print(line, end="")
-            ui(lambda i=i, line=line: (bar.config(value=i), log.insert(END, line), log.see(END)))
+            ui(lambda i=i, line=line: (bar.config(value=100 * i), log.insert(END, line), log.see(END)))
         ui(lambda: (status.config(text=f"Done: {len(jobs)} files, {result['failed']} failed"), close.config(state="normal")))
 
     threading.Thread(target=work, daemon=True).start()
@@ -260,7 +271,11 @@ def main(argv: list[str] | None = None) -> int:
         failed = 0
         asker = Asker(default)
         for i, (src, dst) in enumerate(jobs, 1):
-            res, msg = convert_job(cli, src, dst, asker)
+            def show(pct, i=i, src=src):
+                filled = round(30 * ((i - 1) + pct / 100) / len(jobs))
+                print(f"\r[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {src.name} {pct:3.0f}%", end="", flush=True)
+            res, msg = convert_job(cli, src, dst, asker, show)
+            print("\r", end="")
             failed += res == "FAIL"
             filled = round(30 * i / len(jobs))
             print(f"[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {res:<4} {src}  ->  {dst.name}  ({msg})")
