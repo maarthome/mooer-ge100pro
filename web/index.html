@@ -114,7 +114,9 @@
   dialog label.exp-sw { margin: 8px 0; }
   .exp-cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; }
   .exp-mods, .exp-params { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
-  .exp-params { max-height: 280px; overflow-y: auto; padding-top: 8px; border-top: 1px solid var(--edge); }
+  .exp-params { padding-top: 8px; border-top: 1px solid var(--edge); }
+  .sys-grid input[type=range]:disabled { opacity: .4; }
+  .sys-grid input[type=range] { min-width: 140px; }
   .exp-mods button, .exp-params button { height: 34px; border: 1px solid var(--edge); border-radius: var(--r); background: var(--chassis); color: var(--silk); font: inherit; cursor: pointer; }
   .exp-mods button.on, .exp-params button.on { border-color: var(--led); color: var(--led); }
   #saveTarget { width: 100%; min-width: 360px; height: 34px; margin: 4px 0 6px; background: var(--chassis); color: var(--silk); border: 1px solid var(--edge); border-radius: var(--r); font: inherit; }
