@@ -569,23 +569,29 @@ async function selectPreset(n) {
   }
   app.busy = true;
   app.loading = true;
+  app.pending = n;
+  // show the choice at once; the pedal sends the preset about 0.35 s after the switch
+  $('pnum').textContent = bankLabel(n);
+  $('pname').textContent = app.names[n] || '';
+  $('pstate').textContent = 'Loading…';
+  $('pstate').className = 'pstate';
   renderList();
   try {
     const st = (await request(P.CMD.STATE, [], P.REPLY.STATE)).payload;
     const next = Uint8Array.from(st);
     next[0] = n;
-    const dump = waitFor(P.REPLY.PRESET_DUMP, 2000);
+    const dump = waitFor(P.REPLY.PRESET_DUMP, 800);
     const ack = await request(P.CMD.SET_STATE, Array.from(next), P.REPLY.SET_STATE);
     if (ack.payload[0] !== 1) throw new Error('the pedal refused the preset change');
     await dump.catch(async () => {           // pedal did not push the new preset: ask for it
-      await new Promise((r) => setTimeout(r, 300));
       app.loading = true;
       await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
     });
   } catch (e) { fail(e); }
   app.loading = false;
   app.busy = false;
-  renderList();
+  app.pending = null;
+  renderPreset();
 }
 
 let sendTimer = null;
@@ -654,7 +660,7 @@ function renderList() {
     const li = document.createElement('li');
     const b = document.createElement('button');
     if (nm === 'EMPTY') b.classList.add('empty');
-    if (app.preset && app.preset.preset === n) { b.classList.add('cur'); b.setAttribute('aria-current', 'true'); }
+    if (app.pending ? app.pending === n : app.preset && app.preset.preset === n) { b.classList.add('cur'); b.setAttribute('aria-current', 'true'); }
     b.disabled = app.busy;
     b.innerHTML = `<span class="num">${bankLabel(n)}</span><span class="nm"></span>`;
     b.querySelector('.nm').textContent = nm === 'EMPTY' ? 'Empty' : nm;
