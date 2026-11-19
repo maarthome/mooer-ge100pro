@@ -400,7 +400,12 @@ function modelSelectable(type, model) {
   if (!(info.user_slots && u <= info.user_slots && names && names[u])) return false;   // empty: never
   // amp user slot u is model 100 + u - 1 on the wire (seen: user amp 75 = slot 3 = model 102);
   // for drives and cabs that is not confirmed yet, so only once the pedal itself has used the slot
-  return type === 2 || Boolean(learnedRecord(type, model));
+  return numberingConfirmed(type) || Boolean(learnedRecord(type, model));
+}
+/** Is "user slot u = model 100 + u - 1" confirmed for this type? Amps: yes (user amp 75 came back as 102).
+ *  Cabs / drives: once the pedal itself has reported any user slot of that type with a model of 100 or more. */
+function numberingConfirmed(type) {
+  return type === 2 || Object.keys(learned).some((k) => k.startsWith(`${type}:w`));
 }
 /** The slot's text field for a model: "MEMORY" for a factory model, the capture / IR name for a user slot
  *  (as the pedal itself fills it). A model change that kept the old text locked the pedal up. */
@@ -918,7 +923,7 @@ const LOADERS = {
        help: 'Only <b>.wav</b> IR files can be loaded. The pedal takes the first 1024 samples of the first channel, at 44.1 kHz.' },
 };
 
-function pickGnr(list, u) {
+function pickGnr(list, u, slotIndex) {
   if (!app.dev || app.busy) return;
   const L = LOADERS[list];
   if (!L) return;
@@ -943,7 +948,7 @@ function pickGnr(list, u) {
     } catch (e) { info.textContent = 'Can\'t use this file: ' + e.message; }
   };
   name.oninput = () => { load.disabled = !data || !name.value.trim(); };
-  dlg.onclose = () => { if (dlg.returnValue === 'load' && data) uploadCapture(list, u, name.value.trim(), data); };
+  dlg.onclose = () => { if (dlg.returnValue === 'load' && data) uploadCapture(list, u, name.value.trim(), data, slotIndex); };
   dlg.returnValue = '';
   dlg.showModal();
 }
@@ -951,7 +956,7 @@ function pickGnr(list, u) {
 /** Load capture data into user slot u, as Mooer Studio does (capture 07 / 08):
  *  0x61 [list, slot u16, parts, index, length u16, bytes] for each part, answered by 0x62 [list, slot u16, index].
  *  Part 0 is the name, parts 1.. carry 512 bytes each. The pedal then pushes the new entry as 0x69. */
-async function uploadCapture(list, u, name, data) {
+async function uploadCapture(list, u, name, data, slotIndex) {
   if (!app.dev || app.busy) return;
   const chunks = [];
   for (let o = 0; o < data.length; o += 512) chunks.push(data.subarray(o, o + 512));
@@ -971,7 +976,16 @@ async function uploadCapture(list, u, name, data) {
     }
     await sleep(300);   // the pedal stores it and pushes 0x69
     await request(P.CMD.LIST, [list, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
-    toast(`Loaded "${name}" into user slot ${u}`);
+    // put the new capture into the block it was loaded from, when the pedal's number for it is known
+    const s = slotIndex !== undefined && app.preset && app.preset.slots[slotIndex];
+    const info = s && typeInfo(s.type);
+    if (s && s.used && info.user_list === list && numberingConfirmed(s.type)) {
+      app.busy = false;
+      setModel(s, info.models.length + u - 1);
+      toast(`Loaded "${name}" into user slot ${u} and put it in this preset (not saved yet)`);
+    } else {
+      toast(`Loaded "${name}" into user slot ${u}. To use it in this preset, choose it once on the pedal itself`);
+    }
   } catch (e) {
     fail(e);
     await request(P.CMD.LIST, [list, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
@@ -1163,7 +1177,7 @@ function buildModelPicker(box, s) {
         pm.title = `Load a .${LOADERS[info.user_list].ext} ${LOADERS[info.user_list].what} into user slot ${u}`;
         pm.classList.add('live');
         pm.removeAttribute('aria-disabled');
-        pm.addEventListener('click', (e) => { e.stopPropagation(); close(); pickGnr(info.user_list, u); });
+        pm.addEventListener('click', (e) => { e.stopPropagation(); close(); pickGnr(info.user_list, u, s.index); });
       } else {
         pm.title = empty ? PM_ADD_HINT : PM_HINT;
         pm.setAttribute('aria-disabled', 'true');
