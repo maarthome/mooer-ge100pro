@@ -18,6 +18,7 @@ Usage (Windows, Python 3.9+):
     python nam_to_gnr.py                      window: Single or Directory, then a progress bar
     python nam_to_gnr.py <file.nam | folder>  no questions
     python nam_to_gnr.py --cli <path to nam_to_gnr_cli.exe> ...
+    --overwrite / --skip                      what to do with files converted before (else: asked)
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -82,6 +84,50 @@ def convert(cli: Path, src: Path, dst: Path) -> tuple[bool, str]:
     return True, f"{dst.stat().st_size} bytes"
 
 
+def existing_for(dst: Path) -> list[Path]:
+    """Earlier .gnr files of the same capture in the same folder: same 18 characters, any date and time."""
+    if not dst.parent.is_dir():
+        return []
+    pat = re.compile(re.escape(dst.name[:NAME_LEN]) + r"_\d{4}-\d{2}-\d{2}_\d{4}\.gnr$", re.IGNORECASE)
+    return sorted(p for p in dst.parent.iterdir() if p.is_file() and pat.match(p.name))
+
+
+def convert_job(cli: Path, src: Path, dst: Path, ask) -> tuple[str, str]:
+    """Convert one file. If it was converted before, ask(src, old files) -> 'overwrite' or 'skip'.
+    Overwrite: convert, then remove the old .gnr files. Returns (OK | FAIL | SKIP, message)."""
+    old = existing_for(dst)
+    if old and ask(src, old) == "skip":
+        return "SKIP", f"already converted: {old[-1].name}"
+    ok, msg = convert(cli, src, dst)
+    if ok:
+        old = [o for o in old if o.resolve() != dst.resolve()]   # same name: already overwritten
+        for o in old:
+            o.unlink(missing_ok=True)
+        msg += ", replaced the earlier version"
+    return ("OK" if ok else "FAIL"), msg
+
+
+class Asker:
+    """Remembers 'for all remaining files' answers for this run."""
+    def __init__(self, default: str | None = None):
+        self.default = default
+
+    def __call__(self, src: Path, old: list[Path]) -> str:
+        if self.default:
+            return self.default
+        answer, for_all = self.prompt(src, old)
+        if for_all:
+            self.default = answer
+        return answer
+
+    def prompt(self, src, old):   # console: o / s, capital letter = for all remaining files
+        while True:
+            a = input(f"{src.name} was converted before ({old[-1].name}). "
+                      "Overwrite or skip? [o / s, O / S = for all remaining files]: ").strip()
+            if a in ("o", "s", "O", "S"):
+                return ("overwrite" if a.lower() == "o" else "skip"), a.isupper()
+
+
 def jobs_for(source: Path, when: dt.datetime) -> list[tuple[Path, Path]]:
     if source.is_file():
         return [(source, source.with_name(out_name(source, when)))]
@@ -125,7 +171,7 @@ def ask_source() -> Path | None:
     return Path(p) if p else None
 
 
-def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]]) -> int:
+def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]], default: str | None = None) -> int:
     """Convert in a background thread while a window shows a progress bar and the results."""
     import threading
     from tkinter import Tk, Text, ttk, END
@@ -148,16 +194,41 @@ def run_with_progress(cli: Path, jobs: list[tuple[Path, Path]]) -> int:
     def ui(fn):                       # run fn in the Tk thread
         root.after(0, fn)
 
+    def gui_prompt(src, old):         # called from the worker thread: show the question in the Tk thread, wait
+        import threading as th
+        from tkinter import Toplevel, BooleanVar
+        done, out = th.Event(), {}
+        def show():
+            win = Toplevel(root)
+            win.title("Already converted")
+            win.transient(root); win.grab_set(); win.resizable(False, False)
+            f = ttk.Frame(win, padding=14); f.grid()
+            ttk.Label(f, text=f"{src.name} was converted before:\n{old[-1].name}\n\nOverwrite it, or skip this file?",
+                      justify="left").grid(column=0, row=0, columnspan=2, sticky="w")
+            all_var = BooleanVar(value=False)
+            ttk.Checkbutton(f, text="Use this answer for all remaining files", variable=all_var).grid(
+                column=0, row=1, columnspan=2, sticky="w", pady=10)
+            def answer(a):
+                out["a"] = (a, all_var.get()); win.destroy(); done.set()
+            ttk.Button(f, text="Overwrite", command=lambda: answer("overwrite")).grid(column=0, row=2, padx=4)
+            ttk.Button(f, text="Skip", command=lambda: answer("skip")).grid(column=1, row=2, padx=4)
+            win.protocol("WM_DELETE_WINDOW", lambda: answer("skip"))
+        ui(show)
+        done.wait()
+        return out["a"]
+
+    asker = Asker(default)
+    asker.prompt = gui_prompt
+
     def work():
         for i, (src, dst) in enumerate(jobs, 1):
             ui(lambda i=i, src=src: status.config(text=f"{i} of {len(jobs)}: {src.name}"))
-            ok, msg = convert(cli, src, dst)
-            result["failed"] += not ok
-            line = f"{'OK  ' if ok else 'FAIL'} {src}  ->  {dst}  ({msg})\n"
+            res, msg = convert_job(cli, src, dst, asker)
+            result["failed"] += res == "FAIL"
+            line = f"{res:<4} {src}  ->  {dst}  ({msg})\n"
             print(line, end="")
             ui(lambda i=i, line=line: (bar.config(value=i), log.insert(END, line), log.see(END)))
-        done = len(jobs) - result["failed"]
-        ui(lambda: (status.config(text=f"Done: {done} converted, {result['failed']} failed"), close.config(state="normal")))
+        ui(lambda: (status.config(text=f"Done: {len(jobs)} files, {result['failed']} failed"), close.config(state="normal")))
 
     threading.Thread(target=work, daemon=True).start()
     root.mainloop()
@@ -168,7 +239,11 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Convert .nam files to .gnr with Mooer's nam_to_gnr_cli.exe")
     ap.add_argument("source", nargs="?", help=".nam file or folder (asked in a window when left out)")
     ap.add_argument("--cli", help="path to nam_to_gnr_cli.exe")
+    g = ap.add_mutually_exclusive_group()
+    g.add_argument("--overwrite", action="store_true", help="convert again files that were converted before")
+    g.add_argument("--skip", action="store_true", help="skip files that were converted before")
     args = ap.parse_args(argv)
+    default = "overwrite" if args.overwrite else "skip" if args.skip else None
 
     source = Path(args.source) if args.source else ask_source()
     if not source or not source.exists():
@@ -180,15 +255,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"No .nam files in {source}")
         return 1
     if not args.source:               # started without arguments: windows all the way
-        failed = run_with_progress(cli, jobs)
+        failed = run_with_progress(cli, jobs, default)
     else:
         failed = 0
+        asker = Asker(default)
         for i, (src, dst) in enumerate(jobs, 1):
-            ok, msg = convert(cli, src, dst)
-            failed += not ok
+            res, msg = convert_job(cli, src, dst, asker)
+            failed += res == "FAIL"
             filled = round(30 * i / len(jobs))
-            print(f"[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {'OK  ' if ok else 'FAIL'} {src}  ->  {dst.name}  ({msg})")
-        print(f"\n{len(jobs) - failed} converted, {failed} failed.")
+            print(f"[{'#' * filled}{'.' * (30 - filled)}] {i}/{len(jobs)} {res:<4} {src}  ->  {dst.name}  ({msg})")
+        print(f"\n{len(jobs)} files, {failed} failed.")
     return 1 if failed else 0
 
 
