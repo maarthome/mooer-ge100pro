@@ -126,6 +126,7 @@
   .log { position: fixed; right: 16px; bottom: 56px; width: min(720px, calc(100vw - 32px)); height: 300px; background: #222a33; border: 1px solid var(--edge); border-radius: 8px; overflow: auto; font: 12px/1.45 Consolas, "Cascadia Mono", monospace; padding: 8px 10px; white-space: pre; display: none; }
   .log.open { display: block; }
   .log .h { color: var(--led); }
+  .log .n { color: #f0c36a; }
 
   /* dialog + toast */
   dialog { background: var(--panel); color: var(--silk); border: 1px solid var(--edge); border-radius: 10px; padding: 20px 22px; max-width: 440px; }
@@ -192,6 +193,7 @@
   <span id="fw"></span>
   <span class="spacer"></span>
   <button class="linkish" id="logBtn" aria-expanded="false">Show traffic</button>
+  <button class="linkish" id="copyLogBtn">Copy traffic</button>
   <button class="linkish" id="creditsBtn">Credits</button>
   <button class="btn primary" id="saveBtn" disabled>Save</button>
 </footer>
@@ -347,14 +349,27 @@ const app = {
 };
 
 // ---------- transport ------------------------------------------------------------------
+function stamp() {
+  const d = new Date();
+  return d.toTimeString().slice(0, 8) + '.' + String(d.getMilliseconds()).padStart(3, '0');
+}
+/** A plain text line in the traffic log (connect, disconnect, errors). */
+function note(text) {
+  const el = $('log');
+  const div = document.createElement('div');
+  div.className = 'n';
+  div.textContent = `${stamp()} ** ${text}`;
+  el.appendChild(div);
+  if (el.classList.contains('open')) el.scrollTop = el.scrollHeight;
+}
 function log(dir, f) {
   const el = $('log');
-  const line = `${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload.slice(0, 48), (b) => b.toString(16).padStart(2, '0')).join(' ')}${f.payload.length > 48 ? ' …' : ''}`;
+  const line = `${stamp()} ${dir === 'host' ? '→' : '←'} ${f.cmd.toString(16).padStart(2, '0')} ${Array.from(f.payload.slice(0, 48), (b) => b.toString(16).padStart(2, '0')).join(' ')}${f.payload.length > 48 ? ' …' : ''}`;
   const span = document.createElement('div');
   if (dir === 'host') span.className = 'h';
   span.textContent = line;
   el.appendChild(span);
-  while (el.childNodes.length > 400) el.removeChild(el.firstChild);
+  while (el.childNodes.length > 3000) el.removeChild(el.firstChild);
   if (el.classList.contains('open')) el.scrollTop = el.scrollHeight;
 }
 
@@ -437,6 +452,7 @@ async function connect() {
     const [dev] = await navigator.hid.requestDevice({ filters: [{ vendorId: P.VENDOR_ID, productId: P.PRODUCT_ID }] });
     if (!dev) return;
     if (!dev.opened) await dev.open();
+    note(`connected: ${dev.productName || "GE100 Pro"}`);
     app.dev = dev;
     dev.addEventListener('inputreport', onReport);
     setConn('Reading the pedal…', 'on');
@@ -471,6 +487,7 @@ function setConn(text, led) {
 }
 
 function disconnected() {
+  note('pedal disconnected (USB)');
   app.dev = null;
   setConn('Not connected', '');
   $('connectBtn').disabled = false;
@@ -893,6 +910,7 @@ function toast(msg, err) {
 
 function fail(e) {
   console.error(e);
+  note('error: ' + (e && e.message ? e.message : String(e)));
   toast(e && e.message ? e.message.charAt(0).toUpperCase() + e.message.slice(1) : 'Something went wrong talking to the pedal', true);
 }
 
@@ -928,6 +946,16 @@ $('logBtn').addEventListener('click', () => {
   const open = $('log').classList.toggle('open');
   $('logBtn').textContent = open ? 'Hide traffic' : 'Show traffic';
   $('logBtn').setAttribute('aria-expanded', String(open));
+});
+$('copyLogBtn').addEventListener('click', async () => {
+  const text = Array.from($('log').childNodes, (n) => n.textContent).join('\n');
+  try { await navigator.clipboard.writeText(text); toast('Traffic copied'); }
+  catch (e) {                                   // clipboard blocked: offer it as a file instead
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = 'ge100pro-traffic.txt';
+    a.click();
+  }
 });
 if (!('hid' in navigator)) { $('noHid').hidden = false; $('connectBtn').disabled = true; }
 else navigator.hid.addEventListener('disconnect', (e) => { if (e.device === app.dev) disconnected(); });
