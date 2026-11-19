@@ -210,7 +210,9 @@ slots, shown as amp models 73–92; in this pedal 1–4 hold NAM/MNRS captures (
 **The pedal does not send factory model names**: those come from the manual (`models.json`). The 20-byte text field
 of a slot record holds the name of the capture in use or `MEMORY`.
 
-**A user capture / IR in a slot is model 120 (0x78) with its name in the text field**, not "factory count + slot"
+**User slot u (1–20) is model 100 + u − 1 on the wire** [V for amps, 2026-11-19: choosing user amp 75
+(slot 3) on the pedal made it report model 102; drives and cabs assumed the same, not confirmed].
+**Model 120 (0x78) with a name in the text field is the capture stored in the preset itself** (Mooer Studio "93"), not "factory count + slot"
 [V, capture1: amp `120 "Clean_9b5eltcb"`, cab `120 "1971 Fender Twin R"`]. Word 11 is `0x0001` for a user amp and
 `0x0101` for a user IR there. Mooer Studio shows model 120 **after** the user slots, as the preset's own capture
 (amp: "93. Conv_100_netMesaBo" below "73.–92. EMPTY", 2026-11-19), so 120 + name is a capture stored in the preset; how

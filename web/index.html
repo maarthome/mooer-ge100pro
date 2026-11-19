@@ -357,29 +357,29 @@ const modelCount = (t) => typeInfo(t).models.length + (typeInfo(t).user_slots ||
  *  Choosing that user slot in the editor sends back exactly the pedal's own record, never a guess. */
 const learned = (() => { try { return JSON.parse(localStorage.getItem('ge100pro.captures') || '{}'); } catch (e) { return {}; } })();
 function learnCapture(s) {
-  if (!s.used || s.model !== USER_MODEL || !s.text || s.type < 1 || s.type > 3) return;
-  const key = `${s.type}:${s.text}`, hex = Array.from(s.raw, (b) => b.toString(16).padStart(2, '0')).join('');
+  if (!s.used || s.type < 1 || s.type > 3) return;
+  const info = typeInfo(s.type);
+  if (!(s.model >= USER_BASE && s.model < USER_BASE + (info.user_slots || 0))) return;
+  const key = `${s.type}:w${s.model}`, hex = Array.from(s.raw, (b) => b.toString(16).padStart(2, '0')).join('');
   if (learned[key] === hex) return;
   learned[key] = hex;
   try { localStorage.setItem('ge100pro.captures', JSON.stringify(learned)); } catch (e) { /* private mode */ }
 }
-function learnedRecord(type, model) {
-  const info = typeInfo(type);
-  const names = info.user_list !== undefined && app.userNames[info.user_list];
-  const name = names && names[model - info.models.length + 1];
-  const hex = name && learned[`${type}:${name.slice(0, 20)}`];
+/** The pedal's own record for editor model m (a user slot), if the pedal has sent one. */
+function learnedRecord(type, m) {
+  const hex = learned[`${type}:w${USER_BASE + m - typeInfo(type).models.length}`];
   return hex ? Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16)) : null;
 }
 
 function modelSelectable(type, model) {
   const info = typeInfo(type);
   if (model < info.models.length) return true;
-  // User slots stay off until a Mooer Studio capture shows how it selects one: the list position (72-91)
-  // locked the pedal up, and 120 + name only renames the preset's own capture (pedal shows "93:<name>").
-  if (!USER_SLOTS_SELECTABLE) return Boolean(model < modelCount(type) && learnedRecord(type, model));
   const u = model - info.models.length + 1;
   const names = info.user_list !== undefined && app.userNames[info.user_list];
-  return Boolean(info.user_slots && u <= info.user_slots && names && names[u]);
+  if (!(info.user_slots && u <= info.user_slots && names && names[u])) return false;   // empty: never
+  // amp user slot u is model 100 + u - 1 on the wire (seen: user amp 75 = slot 3 = model 102);
+  // for drives and cabs that is not confirmed yet, so only once the pedal itself has used the slot
+  return type === 2 || Boolean(learnedRecord(type, model));
 }
 /** The slot's text field for a model: "MEMORY" for a factory model, the capture / IR name for a user slot
  *  (as the pedal itself fills it). A model change that kept the old text locked the pedal up. */
@@ -394,31 +394,20 @@ function slotText(type, model) {
  *  instead made the pedal show Chinese characters and drop off USB. In the editor a user slot u is
  *  numbered factory count + u - 1 (as the pedal lists it); these two functions convert. */
 const USER_MODEL = 120;
-const USER_SLOTS_SELECTABLE = false;
+/** User slot u (1-20) is model USER_BASE + u - 1 on the wire: the pedal reported model 102 for user amp 75
+ *  (slot 3). Sending the list position (72-91) instead locked the pedal up; 120 + name is the capture stored
+ *  in the preset itself (Mooer Studio: "93"). In the editor user slot u is numbered factory count + u - 1. */
+const USER_BASE = 100;
 function uiModel(s) {
-  if (!USER_SLOTS_SELECTABLE) {
-    const info = typeInfo(s.type);
-    if (s.model === USER_MODEL && info.user_slots) {   // a learned user slot: show it as 73-92, else as 93
-      for (let m = info.models.length; m < modelCount(s.type); m++) {
-        const rec = learnedRecord(s.type, m);
-        if (rec && P.parseSlot(0, rec).text === s.text) return m;
-      }
-    }
-    return s.model;
-  }
   const info = typeInfo(s.type);
-  if (s.model !== USER_MODEL || !info.user_slots) return s.model;
-  const names = (info.user_list !== undefined && app.userNames[info.user_list]) || {};
-  for (let u = 1; u <= info.user_slots; u++) {
-    if (names[u] && names[u].slice(0, 20) === s.text) return info.models.length + u - 1;
-  }
-  return s.model;   // a capture not in the list (yet)
+  if (info.user_slots && s.model >= USER_BASE && s.model < USER_BASE + info.user_slots) return info.models.length + s.model - USER_BASE;
+  return s.model;
 }
-/** Put editor model m into slot s: model number, text field and word 11 as the pedal stores them. */
+/** Put editor model m into slot s: the model number, and for a user slot its name and word 11. */
 function setWireModel(s, m) {
   const info = typeInfo(s.type);
   const user = m >= info.models.length;
-  s.model = user ? USER_MODEL : m;
+  s.model = user ? USER_BASE + m - info.models.length : m;
   s.text = slotText(s.type, m).slice(0, 20);
   s.word11 = user && s.type === 3 ? 0x0101 : 1;   // user IR slots hold 0x0101 there, everything else 1
 }
@@ -997,7 +986,7 @@ function knobParse(k, text) {
  *  capture into an empty slot) and − (delete it), like Mooer Studio; those and choosing a user slot wait for a
  *  Mooer Studio capture of the commands, because guessing them locked the pedal up. */
 const PM_HINT = 'Loading and deleting captures is not possible yet: the command is still unknown (needs a Mooer Studio capture)';
-const USER_HINT = 'Choose this capture once on the pedal itself; after that you can choose it here too';
+const USER_HINT = 'Empty, or (drive / cab) not used on the pedal yet: choose it once on the pedal itself';
 function buildModelPicker(box, s) {
   const btn = box.querySelector('button.model'), list = box.querySelector('.mlist');
   const cur = uiModel(s);

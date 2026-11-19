@@ -94,6 +94,8 @@ def knob_text(knob: dict, value: int) -> str:
 
 
 USER_MODEL = 120
+USER_BASE = 100
+"""User capture / IR slot u is model USER_BASE + u - 1 on the wire (user amp 75 = slot 3 = model 102)."""
 """Model number of a user capture / IR on the wire; the capture's name is in the slot's text field."""
 
 
@@ -101,6 +103,8 @@ def model_label(slot_type: int, model: int, text: str = "") -> str:
     """Model as the pedal shows it, e.g. '01 | 65 US DX' (the wire model number is 0-based)."""
     info = MODELS.get(str(slot_type), {"models": []})
     names = info["models"]
+    if USER_BASE <= model < USER_BASE + info.get("user_slots", 0):
+        return f"{len(names) + model - USER_BASE + 1:02d} | User {model - USER_BASE + 1}"
     if model == USER_MODEL and info.get("user_slots"):
         return f"{len(names) + info['user_slots'] + 1:02d} | {text or '?'}"
     if model < len(names):
