@@ -198,3 +198,33 @@ def test_web_models_js_is_in_sync():
     spec.loader.exec_module(gen)
     current = (Path(__file__).parent.parent / "web" / "models.js").read_text(encoding="utf-8")
     assert current == gen.render(), "run: python3 tools/gen_models_js.py"
+
+
+# --- knobs (names and encodings from Mooer Studio's tables) -------------------------------
+
+def test_knobs_on_real_presets():
+    msgs = [decode(f, d) for _, d, f in frames_from_pcapng(str(CONNECT))]
+    dump = next(m for m in msgs if isinstance(m, PresetDump))  # 28A JP Lead
+    knobs = {s.index: s.knobs for s in dump.slots if s.used}
+    assert knobs[2] == [("GAIN", "70"), ("BASS", "57"), ("MID", "48"), ("TREBLE", "26"), ("PRES", "25"), ("MST", "75")]
+    assert knobs[3][2] == ("750Hz", "-2 dB")
+    assert knobs[4] == [("Level", "21"), ("Feedback", "30"), ("Time A", "222 ms"), ("Sub A", "OFF"),
+                        ("Time B", "423 ms"), ("Sub B", "OFF")]
+    assert knobs[5][0] == ("Pre Delay", "0 ms")
+    assert knobs[9] == [("LOW CUT", "OFF"), ("HIGH CUT", "12060 Hz"), ("ROOM", "23")]
+
+
+def test_delay_subdivision_names_match_the_measured_times():
+    from ge100pro.messages import knob_text, knobs_for
+    sub = knobs_for(7, 0)[3]
+    # measured on the pedal: 494, 494, 329, 742, 247, 165 ms for sub-division 0..5
+    assert [knob_text(sub, i) for i in range(6)] == ["OFF", "1/4", "1/4T", "1/4D", "1/8", "1/8T"]
+
+
+def test_model_names_from_firmware():
+    assert model_label(0, 14) == "15 | INTER REDUCER"   # as spelled in the firmware
+    assert model_label(5, 0) == "01 | 3 BANDS EQ"
+    assert model_label(7, 8) == "09 | DUAL DELAY"
+    for t, info in MODELS.items():
+        if "knobs" in info:
+            assert len(info["knobs"]) == len(info["models"]), t

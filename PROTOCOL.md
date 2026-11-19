@@ -132,26 +132,42 @@ The chain has 10 positions. In preset 82 slots 0–5 and 9 are used, 6–8 empty
 
 `27` = `slot index (1 byte)` + this 50-byte record [V].
 
-**Effect types and models.** The type number is the position of the category in the manual's model list, and the
-model number is the 0-based position in that category's list: model 0 is shown on the pedal as `01`. The lists are
-in `src/ge100pro/models.json` (from the GE100 Pro owner's manual) [V for amp: model 0 = "01 | 65 US DX" confirmed on
-the pedal; the decoded presets make sense, e.g. 28A "JP Lead" = 28 MARKV DS amp, 22 GOLD CLON drive, 09 Dual Delay
-with two delay times].
+**Effect types and models.** The type number is the category, the model number the 0-based position in that
+category's list: model 0 is shown on the pedal as `01`. All names and knobs are in `src/ge100pro/models.json`:
 
-| Type | Category | Models | Parameters seen |
+- **Model names** as the pedal shows them: the `NN:NAME` strings in the GE100 Pro firmware (`GE100PRO.mr`, which ships
+  with Mooer Studio), e.g. `01:65 US DX`, `09:DUAL DELAY`, `15:INTER REDUCER` (sic). [V]
+- **Knob names, ranges and value encodings**: Mooer Studio for GE100 Pro V1.3.3 has them built in (its effect tables);
+  the pedal does not send them. Every slot record of the captures decodes sensibly with them. [V]
+
+| Type | Category | Models | Knobs (examples) |
 |---|---|---|---|
-| 0 | Pre FX (wah, compressors) | 15 | e.g. Yellow Comp 100, 86, 43, 53 |
-| 1 | Drive | 35 | e.g. GOLD CLON 100, 10 |
-| 2 | Amp | 72 + 20 user capture slots (73–92) | 6: Gain, Bass, Mid, Treble, Presence, Master (order as on Mooer amps [H]) |
-| 3 | Cab | 67 + 20 user IR slots (68–87) | e.g. 0, 7941, 23 |
-| 4 | Noise reduction | 3 | e.g. Noise Suppressor 30, 85, 30, 50 |
-| 5 | EQ | 6 | HM-EQ: 5 × ~16 (band gains, centre 16?); Custom EQ: 22, 110, 7, **800**, 14, **1513/4000** (gain/freq pairs?) |
-| 6 | Modulation | 27 | e.g. Analog Chorus 11, 26, 28, 47 |
-| 7 | Delay | 12 | see below; Dual Delay holds two times (222, 423 ms) |
-| 8 | Reverb | 9 | 4: 0, 21, 50, 35 (Pre Delay, Level, Decay, Tone as on the Prime M2? [H]) |
+| 0 | Pre FX (wah, compressors, limiter, reducer) | 15 | CRY WAH: Q, Position, Peak, Level |
+| 1 | Drive | 35 + 10 user captures (36–45) | Volume, Tone, Gain |
+| 2 | Amp | 72 + 20 user captures (73–92) | GAIN, BASS, MID, TREBLE, PRES, MST |
+| 3 | Cab | 67 + 20 user IRs (68–87) | LOW CUT, HIGH CUT, ROOM |
+| 4 | Noise reduction | 3 | NOISE KILLER: THRES; INTEL REDUCER: SENS; NOISE GATE: ATTACK, RELEASE, THRES |
+| 5 | EQ | 6 | MOOER HM: 80Hz, 240Hz, 750Hz, 2.2KHz, 6.6KHz; CUSTOM EQ: Gain/Freq × 3 |
+| 6 | Modulation | 27 | PHASER: Rate, Level, Depth; PITCH SHIFT: Pitch, Mix, Tone |
+| 7 | Delay | 12 | DIGITAL: Level, Feedback, Time, Sub-D; DUAL DELAY: Time A/B, Sub A/B |
+| 8 | Reverb | 9 | Pre Delay, Level, Decay, Tone (SHIMMER: + Shimmer) |
 
-Knob names and ranges per model are **not** in the manual, and the pedal has not been seen sending them; Mooer Studio
-has them built in. Open question.
+**Value encodings** (stored u16 → shown value), from Mooer Studio's conversion code:
+
+| Kind | Shown as | Example |
+|---|---|---|
+| plain (most knobs) | the stored value, 0–100 | GAIN 70 |
+| dB | stored + min | EQ −16…+16 dB: stored 16 = 0 dB, 14 = −2 dB |
+| pitch | min + stored / 10 | PITCH SHIFT −12…+12: stored 0…240 |
+| time | ms as stored | delay Time 40…2500, reverb Pre Delay 0…500 |
+| Hz | Hz as stored | CUSTOM EQ Freq 0…18000 |
+| range | min + stored | SWEEP Range 300…4000 |
+| sub-division | index into `OFF, 1/4, 1/4T, 1/4D, 1/8, 1/8T, 1/8D, 1/16, 1/16T, 1/16D` | matches the measured 494/329/742/247/165 ms |
+| cab LOW CUT | 0 = OFF, else 20 + (stored − 1) Hz | |
+| cab HIGH CUT | 0 = OFF, 1 = 20000 Hz, else 20000 − (stored − 1) Hz | stored 7941 = 12060 Hz |
+
+Knob N of a model is slot parameter N. Parameters after the model's last knob are not used (the pedal sometimes keeps
+old values there).
 
 **Preset numbering on the pedal:** 50 banks of 3: preset 1 = `01A`, 2 = `01B`, 3 = `01C`, 4 = `02A` … 150 = `50C`.
 
@@ -243,7 +259,7 @@ python3 -m ge100pro captures/OUT.pcapng
 
 1. Add / remove / move slots, rename, upload; what `2c` (availability) means.
 2. `12`/`15` offset 2 and the constant fields; `49`; `2c`.
-3. Slot record word 0 and the text field; the full effect type and model tables.
+3. Slot record word 0 and the text field.
 4. Preset dump tail (12 bytes).
 5. `43` page ids.
 

@@ -19,8 +19,8 @@ Everything known so far, with what is verified and what is a guess: [PROTOCOL.md
 ## Editor
 
 A web page editor (WebHID) for Edge/Chrome on Windows 11, later also for Chromium on the Pi: open `web/index.html`, see
-[web/README.md](web/README.md). It selects presets, edits the 10-slot chain live (on/off, model, knobs) and saves only
-after you confirm.
+[web/README.md](web/README.md). It selects presets, edits the 10-slot chain live (on/off, model, knobs with their
+names and units) and saves only after you confirm.
 
 ## Quick start (Linux)
 

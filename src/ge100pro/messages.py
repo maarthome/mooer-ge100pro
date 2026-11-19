@@ -55,6 +55,43 @@ def bank_label(preset: int) -> str:
     return f"{(preset + 2) // 3:02d}{'ABC'[(preset - 1) % 3]}"
 
 
+def knobs_for(slot_type: int, model: int) -> list[dict] | None:
+    """Knob definitions (name, kind, range) for a model, in parameter order; see models.json '_knobs'."""
+    info = MODELS.get(str(slot_type))
+    if not info:
+        return None
+    if "knobs_all" in info:
+        return info["knobs_all"]
+    if "knobs" in info and model < len(info["models"]):
+        return info["knobs"][model]
+    return info.get("knobs_user")
+
+
+def knob_text(knob: dict, value: int) -> str:
+    """A stored parameter value as the pedal shows it."""
+    kind = knob["kind"]
+    if kind == "db":
+        v = value + knob["min"]
+        return f"{'+' if v > 0 else ''}{v} dB"
+    if kind == "pitch":
+        v = knob["min"] + value / 10
+        return f"{'+' if v > 0 else ''}{v:.1f}"
+    if kind == "time":
+        return f"{value} ms"
+    if kind == "hz":
+        return f"{value} Hz"
+    if kind == "range":
+        return str(knob["min"] + value)
+    if kind == "sub":
+        opts = knob["options"]
+        return opts[value] if 0 <= value < len(opts) else str(value)
+    if kind == "lowcut":
+        return "OFF" if value == 0 else f"{20 + value - 1} Hz"
+    if kind == "highcut":
+        return "OFF" if value == 0 else "20000 Hz" if value == 1 else f"{20000 - (value - 1)} Hz"
+    return str(value)
+
+
 def model_label(slot_type: int, model: int) -> str:
     """Model as the pedal shows it, e.g. '01 | 65 US DX' (the wire model number is 0-based)."""
     info = MODELS.get(str(slot_type), {"models": []})
@@ -121,6 +158,12 @@ class Slot:
     @property
     def model_name(self) -> str:
         return model_label(self.type, self.model)
+
+    @property
+    def knobs(self) -> list[tuple[str, str]]:
+        """[(knob name, value as shown on the pedal)], or [] if the model has no knob table."""
+        spec = knobs_for(self.type, self.model) or []
+        return [(k["name"], knob_text(k, v)) for k, v in zip(spec, self.params)]
 
 
 def parse_slot(index: int, rec: bytes) -> Slot:
@@ -238,8 +281,8 @@ def describe_request(r: Request) -> str:
 def describe_slot(s: Slot) -> str:
     if not s.used:
         return f"slot {s.index}: empty"
-    return (f"slot {s.index}: {s.type_name} [{s.model_name}] (type={s.type} model={s.model}) on={int(s.enabled)} "
-            f"params={s.params} text='{s.text}'")
+    knobs = ", ".join(f"{n} {v}" for n, v in s.knobs) or f"params={s.params}"
+    return f"slot {s.index}: {s.type_name} [{s.model_name}] {'on' if s.enabled else 'OFF'}: {knobs}"
 
 
 def describe(frame: Frame, direction: str = "pedal") -> str:

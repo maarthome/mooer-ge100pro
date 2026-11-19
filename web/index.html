@@ -92,10 +92,12 @@
   .stepper output { min-width: 200px; padding: 0 10px; text-align: center; font-variant-numeric: tabular-nums; }
   .note { color: var(--dim); font-size: 13px; max-width: 70ch; }
   .knobs { display: flex; flex-wrap: wrap; gap: 18px 26px; }
-  .knob { width: 96px; display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
+  .knob { width: 104px; display: flex; flex-direction: column; align-items: center; gap: 2px; user-select: none; touch-action: none; }
   .knob svg { width: 84px; height: 84px; cursor: ns-resize; }
-  .knob .val { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .knob .lbl { font-size: 13px; color: var(--dim); }
+  .knob .val { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .knob .lbl { font-size: 13px; color: var(--dim); text-align: center; }
+  .knob .val { white-space: nowrap; }
+  .knob.raw { opacity: .6; }
   .knob input { width: 80px; text-align: center; background: var(--chassis); border: 1px solid var(--led); border-radius: 4px; font-size: 18px; padding: 2px; }
   .knob:focus-visible { outline: none; }
   .knob:focus-visible svg .cap { stroke: var(--led); stroke-width: 2; }
@@ -516,7 +518,58 @@ function renderChain() {
   }
 }
 
-function knobMax(v) { return v > 2500 ? 20000 : v > 100 ? 2500 : 100; }
+// ---------- knobs: names, ranges and units from models.js (Mooer Studio's tables) ----------
+function knobsFor(type, model) {
+  const info = typeInfo(type);
+  if (info.knobs_all) return info.knobs_all;
+  if (info.knobs && model < info.models.length) return info.knobs[model];
+  return info.knobs_user || null;
+}
+
+/** Stored (device) value range of a knob. */
+function knobRange(k) {
+  switch (k.kind) {
+    case 'db': return [0, k.max - k.min];
+    case 'pitch': return [0, (k.max - k.min) * 10];
+    case 'time': case 'hz': return [k.min, k.max];
+    case 'range': return [0, k.max - k.min];
+    case 'sub': return [0, k.options.length - 1];
+    case 'lowcut': case 'highcut': return [0, k.raw_max];
+    default: return [0, 100];
+  }
+}
+
+/** Stored value -> text as on the pedal / in Mooer Studio. */
+function knobText(k, d) {
+  switch (k.kind) {
+    case 'db': { const v = d + k.min; return `${v > 0 ? '+' : ''}${v} dB`; }
+    case 'pitch': { const v = k.min + d / 10; return `${v > 0 ? '+' : ''}${v.toFixed(1)}`; }
+    case 'time': return `${d} ms`;
+    case 'hz': return `${d} Hz`;
+    case 'range': return String(k.min + d);
+    case 'sub': return k.options[d] ?? String(d);
+    case 'lowcut': return d === 0 ? 'OFF' : `${20 + d - 1} Hz`;
+    case 'highcut': return d === 0 ? 'OFF' : d === 1 ? '20000 Hz' : `${20000 - (d - 1)} Hz`;
+    default: return String(d);
+  }
+}
+
+/** Typed text -> stored value (NaN if not understood). */
+function knobParse(k, text) {
+  const t = String(text).trim();
+  if (/^off$/i.test(t)) return ['sub', 'lowcut', 'highcut'].includes(k.kind) ? 0 : NaN;
+  if (k.kind === 'sub') { const i = k.options.findIndex((o) => o.toLowerCase() === t.toLowerCase()); return i >= 0 ? i : NaN; }
+  const n = parseFloat(t.replace(',', '.'));
+  if (Number.isNaN(n)) return NaN;
+  switch (k.kind) {
+    case 'db': return Math.round(n - k.min);
+    case 'pitch': return Math.round((n - k.min) * 10);
+    case 'range': return Math.round(n - k.min);
+    case 'lowcut': return n < 20 ? 0 : Math.round(n - 20 + 1);
+    case 'highcut': return n >= 20000 ? 1 : Math.round(20000 - n + 1);
+    default: return Math.round(n);
+  }
+}
 
 function renderEditor() {
   const ed = $('editor');
@@ -536,18 +589,23 @@ function renderEditor() {
   next.addEventListener('click', () => changeModel(s, +1));
   ed.appendChild(head);
 
-  let last = 0;
-  s.params.slice(0, 10).forEach((v, i) => { if (v) last = i + 1; });
-  const count = app.showAll ? 10 : Math.max(last, 1);
+  const spec = knobsFor(s.type, s.model);
   const knobs = document.createElement('div');
   knobs.className = 'knobs';
-  for (let i = 0; i < count; i++) knobs.appendChild(knob(s, i));
+  if (spec) spec.forEach((k, i) => knobs.appendChild(knob(s, i, k)));
+  const named = spec ? spec.length : 0;
+  if (!spec || app.showAll) {
+    for (let i = named; i < 10; i++) knobs.appendChild(knob(s, i, { name: `Param ${i + 1}`, kind: 'raw' }, true));
+  }
   ed.appendChild(knobs);
 
   const foot = document.createElement('p');
   foot.className = 'note';
-  foot.innerHTML = `Knob names and ranges are not known yet: knobs are numbered as on the pedal's screen. <button class="linkish">${app.showAll ? 'Show only used knobs' : 'Show all 10 knobs'}</button>`;
-  foot.querySelector('button').addEventListener('click', () => { app.showAll = !app.showAll; renderEditor(); });
+  foot.innerHTML = spec
+    ? `<button class="linkish">${app.showAll ? 'Hide the unused parameters' : 'Show the unused parameters too'}</button>`
+    : 'No knob table for this model: the raw parameters are shown.';
+  const b = foot.querySelector('button');
+  if (b) b.addEventListener('click', () => { app.showAll = !app.showAll; renderEditor(); });
   ed.appendChild(foot);
 }
 
@@ -559,35 +617,40 @@ function changeModel(s, d) {
   renderChain(); renderEditor();
 }
 
-function knob(s, i) {
+function knob(s, i, k, raw = false) {
   const wrap = document.createElement('div');
-  wrap.className = 'knob';
+  wrap.className = 'knob' + (raw ? ' raw' : '');
   wrap.tabIndex = 0;
   wrap.setAttribute('role', 'slider');
-  const max = knobMax(s.params[i]);
-  wrap.setAttribute('aria-label', `Knob ${i + 1}`);
-  wrap.setAttribute('aria-valuemin', '0');
-  wrap.setAttribute('aria-valuemax', String(max));
+  const [lo, hi] = k.kind === 'raw' ? [0, Math.max(100, s.params[i] > 2500 ? 20000 : s.params[i] > 100 ? 2500 : 100)] : knobRange(k);
+  const span = Math.max(1, hi - lo);
+  const step = k.kind === 'sub' ? 1 : span > 400 ? Math.round(span / 200) : 1;
+  const text = (d) => (k.kind === 'raw' ? String(d) : knobText(k, d));
+  wrap.setAttribute('aria-label', k.name);
+  wrap.setAttribute('aria-valuemin', String(lo));
+  wrap.setAttribute('aria-valuemax', String(hi));
   wrap.innerHTML = `<svg viewBox="0 0 84 84" aria-hidden="true">
       <path class="track" d="" fill="none" stroke="#56616d" stroke-width="5" stroke-linecap="round"/>
       <path class="arc" d="" fill="none" stroke="#ffb23e" stroke-width="5" stroke-linecap="round"/>
       <circle class="cap" cx="42" cy="42" r="25" fill="#2e3742" stroke="#556271" stroke-width="1"/>
       <line class="ptr" x1="42" y1="42" x2="42" y2="22" stroke="#edf0f2" stroke-width="3" stroke-linecap="round"/>
-    </svg><div class="val"></div><div class="lbl">Knob ${i + 1}</div>`;
+    </svg><div class="val"></div><div class="lbl"></div>`;
+  wrap.querySelector('.lbl').textContent = k.name;
   const polar = (a, r) => [42 + r * Math.cos(a), 42 + r * Math.sin(a)];
   const arc = (a0, a1) => { const [x0, y0] = polar(a0, 36), [x1, y1] = polar(a1, 36); return `M${x0.toFixed(2)} ${y0.toFixed(2)} A36 36 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`; };
   const A0 = Math.PI * 0.75, SPAN = Math.PI * 1.5;
   wrap.querySelector('.track').setAttribute('d', arc(A0, A0 + SPAN));
   const draw = () => {
-    const v = s.params[i], t = Math.min(v / max, 1);
+    const v = s.params[i], t = Math.min(Math.max((v - lo) / span, 0), 1);
     wrap.querySelector('.arc').setAttribute('d', t > 0.001 ? arc(A0, A0 + SPAN * t) : '');
     const [x, y] = polar(A0 + SPAN * t, 20);
     const p = wrap.querySelector('.ptr'); p.setAttribute('x2', x.toFixed(2)); p.setAttribute('y2', y.toFixed(2));
-    wrap.querySelector('.val').textContent = v;
+    wrap.querySelector('.val').textContent = text(v);
     wrap.setAttribute('aria-valuenow', String(v));
+    wrap.setAttribute('aria-valuetext', text(v));
   };
   const set = (v) => {
-    v = Math.max(0, Math.min(max, Math.round(v)));
+    v = Math.max(lo, Math.min(hi, Math.round(v)));
     if (v === s.params[i]) return;
     s.params[i] = v; draw(); pushSlot(s.index);
   };
@@ -596,27 +659,29 @@ function knob(s, i) {
   svg.addEventListener('pointerdown', (e) => {
     svg.setPointerCapture(e.pointerId);
     const y0 = e.clientY, v0 = s.params[i];
-    const move = (ev) => set(v0 + ((y0 - ev.clientY) / (ev.shiftKey ? 600 : 160)) * max);
+    const move = (ev) => set(v0 + ((y0 - ev.clientY) / (ev.shiftKey ? 600 : 160)) * span);
     const up = () => { svg.removeEventListener('pointermove', move); svg.removeEventListener('pointerup', up); };
     svg.addEventListener('pointermove', move);
     svg.addEventListener('pointerup', up);
   });
-  wrap.addEventListener('wheel', (e) => { e.preventDefault(); set(s.params[i] + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1) * (max > 100 ? 10 : 1)); }, { passive: false });
+  wrap.addEventListener('wheel', (e) => { e.preventDefault(); set(s.params[i] + (e.deltaY < 0 ? 1 : -1) * (e.shiftKey ? 10 : 1) * step); }, { passive: false });
   wrap.addEventListener('keydown', (e) => {
-    const step = max > 100 ? 10 : 1;
-    const k = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: step * 10, PageDown: -step * 10 }[e.key];
-    if (k) { e.preventDefault(); set(s.params[i] + k); }
-    else if (e.key === 'Home') { e.preventDefault(); set(0); }
-    else if (e.key === 'End') { e.preventDefault(); set(max); }
+    const d = { ArrowUp: step, ArrowRight: step, ArrowDown: -step, ArrowLeft: -step, PageUp: step * 10, PageDown: -step * 10 }[e.key];
+    if (d) { e.preventDefault(); set(s.params[i] + d); }
+    else if (e.key === 'Home') { e.preventDefault(); set(lo); }
+    else if (e.key === 'End') { e.preventDefault(); set(hi); }
     else if (e.key === 'Enter') { e.preventDefault(); edit(); }
   });
   const edit = () => {
     const val = wrap.querySelector('.val');
     const inp = document.createElement('input');
-    inp.type = 'number'; inp.min = 0; inp.max = max; inp.value = s.params[i];
-    inp.setAttribute('aria-label', `Knob ${i + 1} value`);
+    inp.value = text(s.params[i]).replace(/ (dB|ms|Hz)$/, '');
+    inp.setAttribute('aria-label', `${k.name} value`);
     val.replaceWith(inp); inp.focus(); inp.select();
-    const done = (ok) => { if (ok) set(Number(inp.value)); inp.replaceWith(val); draw(); wrap.focus(); };
+    const done = (ok) => {
+      if (ok) { const d = k.kind === 'raw' ? Math.round(Number(inp.value)) : knobParse(k, inp.value); if (!Number.isNaN(d)) set(d); }
+      inp.replaceWith(val); draw(); wrap.focus();
+    };
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); e.stopPropagation(); });
     inp.addEventListener('blur', () => done(true), { once: true });
   };

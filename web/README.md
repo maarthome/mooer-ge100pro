@@ -14,9 +14,9 @@ What it does:
   first instead of saving
 - *Show traffic* shows every message to and from the pedal
 
-Presets are numbered as on the pedal (01A … 50C), models as on the pedal's screen ("01 | 65 US DX", from the manual's
-model lists), and the 20 user amp slots show the names of your captures, read from the pedal. Not known yet, so
-shown as numbers: knob names and ranges.
+Presets are numbered as on the pedal (01A … 50C), models as on the pedal's screen ("01 | 65 US DX"), knobs with their
+names and units (GAIN, Time A 222 ms, HIGH CUT 12060 Hz, 750Hz −2 dB, Sub-D 1/8T …), and the user capture/IR slots
+with the names of your captures, read from the pedal.
 
 ## Run it
 
