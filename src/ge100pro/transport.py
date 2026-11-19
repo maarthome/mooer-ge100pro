@@ -159,3 +159,11 @@ class GE100Pro:
     def request_amp_captures(self) -> None:
         """-> 0x66: the 20 user amp capture slots (type 2), exactly as Mooer Studio asks."""
         self.send(0x65, bytes([0x02, 0x01, 0x00, 0x14, 0x00]))
+
+    def request_user_list(self, slot_type: int) -> None:
+        """-> 0x66: names of the user slots of a type: 1 drive captures, 2 amp captures, 3 cab IRs.
+
+        Same request as Mooer Studio's (entries 1..20) with another type; answered on firmware V1.3.3."""
+        if slot_type not in (1, 2, 3):
+            raise ValueError("only types 1 (drive), 2 (amp) and 3 (cab) have user lists")
+        self.send(0x65, bytes([slot_type, 0x01, 0x00, 0x14, 0x00]))

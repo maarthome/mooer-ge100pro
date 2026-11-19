@@ -347,8 +347,9 @@ async function connect() {
       n.names.forEach((s, i) => { app.names[n.first + i] = s; });
     }
     renderList();
-    // names of the 20 user amp slots (NAM/MNRS captures), exactly as Mooer Studio asks
-    await request(P.CMD.LIST, [0x02, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
+    // names of the user capture/IR slots: drive (1), amp (2), cab (3). Mooer Studio asks for type 2;
+    // types 1 and 3 answer the same request on this pedal (tested with python -m ge100pro.lists).
+    for (const t of [0x01, 0x02, 0x03]) await request(P.CMD.LIST, [t, 0x01, 0x00, 0x14, 0x00], P.REPLY.LIST).catch(() => {});
     await request(P.CMD.CURRENT_PRESET, [], P.REPLY.PRESET_DUMP);
     $('intro').hidden = true;
     $('preset').hidden = false;

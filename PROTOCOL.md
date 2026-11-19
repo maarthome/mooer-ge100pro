@@ -182,7 +182,17 @@ Note: the Prime M2 encodes a synced delay time as `0x8000 | index` instead; the 
 
 Entries of 29 bytes: `type, index (u16), used (1/0), flag (2 if used), name (24 bytes)`. Type 2 = the 20 user amp
 slots, which are amp models 73–92; in this pedal 1–4 hold NAM/MNRS captures ("ReverPlex CLN 1_z2", "Clean_9b5eltcb",
-…). Whether other types have lists (user cab IRs: type 3?) is untested: `python -m ge100pro.lists --yes` asks.
+…). The same request with another type byte (`python -m ge100pro.lists --yes`, 2026-11-19) [V]:
+
+| Type | Reply |
+|---|---|
+| 1 drive | 20 entries: user drive captures, here "1971 Fender Twin R", "Bogie412CB65_CG_16" (drive models 36–45; the specs and the device info say 10 slots) |
+| 2 amp | 20 entries: user amp captures (amp models 73–92) |
+| 3 cab | 20 entries: user IR slots (cab models 68–87), all empty here |
+| 0, 4–8 | `66` with an empty payload |
+
+**The pedal does not send factory model names**: those come from the manual (`models.json`). The 20-byte text field
+of a slot record holds the name of the capture in use ("1971 Fender Twin R" appeared there) or `MEMORY`.
 
 ## 5. Commands that change the pedal
 

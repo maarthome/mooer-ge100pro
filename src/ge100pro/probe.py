@@ -24,7 +24,9 @@ def main() -> int:
                 *[(f"names {a}-{a + 29}", lambda a=a: pedal.request_names(a, a + 29)) for a in range(1, 151, 30)],
                 ("availability", pedal.request_availability),
                 ("current preset", pedal.request_current_preset),
-                ("user amp captures", pedal.request_amp_captures),
+                ("user drive captures", lambda: pedal.request_user_list(1)),
+                ("user amp captures", lambda: pedal.request_user_list(2)),
+                ("user cab IRs", lambda: pedal.request_user_list(3)),
             ]
             for label, request in steps:
                 request()

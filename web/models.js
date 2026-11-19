@@ -63,7 +63,9 @@ window.GE100_MODELS = {
     "RED AT",
     "ODR 1",
     "BE OD"
-   ]
+   ],
+   "user_slots": 10,
+   "user_list": 1
   },
   "2": {
    "name": "Amp",
@@ -217,7 +219,8 @@ window.GE100_MODELS = {
     "TITAN 410",
     "CALI PH810",
     "HNK 115"
-   ]
+   ],
+   "user_list": 3
   },
   "4": {
    "name": "Noise reduction",
@@ -344,5 +347,6 @@ window.GE100_MODELS = {
    "Reverse",
    "Shimmer"
   ]
- }
+ },
+ "_user_slots": "User capture/IR slots follow the factory models: drive 36-45, amp 73-92, cab 68-87. Their names are read from the pedal with 0x65 <type> 0001 0014 (types 1, 2, 3 answer; 0 and 4-8 send an empty list). Slot counts from the device info (0x02 bytes 42-44: 20 amp, 20 cab, 10 drive) and the specs; the drive list returns 20 entries."
 };
