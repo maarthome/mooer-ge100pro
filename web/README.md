@@ -11,8 +11,8 @@ What it does:
 - move a block: drag its card to another place in the chain, or use ◀ Move / Move ▶
 - per slot: pick the model from a drop-down (or − / +), turn the knobs (drag up/down, mouse wheel, arrow keys,
   double-click or Enter to type a value; hold Shift for fine steps); delay sub-divisions are drop-downs
-- Settings (saved in this browser): three text sizes (parameter names in the editor, block names in the chain, all
-  other text), colours, and a colour per effect group
+- Settings (saved in this browser): five text sizes (parameter names in the editor, block names and group names in
+  the chain, the editor heading, all other text), colours, and a colour per effect group
 - follows the pedal: presets, knobs and the cursor changed on the pedal show up in the page
 - **Save** writes the current sound to the preset, only after you confirm; switching presets with unsaved changes asks
   first instead of saving

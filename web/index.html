@@ -83,7 +83,7 @@
   .slot.sel { border-color: var(--led); box-shadow: 0 0 0 1px var(--led); }
   .slot.vacant .main { cursor: default; }
   .slot.vacant { background: var(--chassis); border-style: dashed; border-top-width: 1px; color: var(--led-off); }
-  .slot .pos { margin-right: 22px;  font-size: 0.8rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot .pos { margin-right: 22px; font-size: var(--fs-group, 12px); line-height: 1.3; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .slot .smodel { font-weight: 600; font-stretch: condensed; font-size: var(--fs-block, 15px); line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: break-word; }
   .slot .snum { font-size: 0.8667rem; color: var(--dim); font-variant-numeric: tabular-nums; }
   .slot.off .smodel { color: var(--dim); }
@@ -93,7 +93,7 @@
   /* slot editor */
   .editor { background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 18px 20px 22px; }
   .ehead { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-bottom: 18px; }
-  .ehead h2 { margin: 0; font-size: 1.467rem; font-stretch: condensed; font-weight: 600; }
+  .ehead h2 { margin: 0; font-size: var(--fs-heading, 22px); font-stretch: condensed; font-weight: 600; }
   .switch { display: inline-flex; align-items: center; gap: 8px; background: var(--chassis); border: 1px solid var(--edge); border-radius: 999px; padding: 6px 14px 6px 10px; cursor: pointer; }
   .stepper { display: inline-flex; align-items: center; border: 1px solid var(--edge); border-radius: var(--r); overflow: hidden; }
   .stepper button { background: var(--raised); border: 0; width: 32px; height: 32px; cursor: pointer; font-size: 1.2rem; }
@@ -222,6 +222,8 @@
     <div class="settings-grid">
       <label for="setFsParam">Parameter names in the editor</label><span><input id="setFsParam" type="range" min="10" max="28" step="1"> <output id="setFsParamOut"></output></span>
       <label for="setFsBlock">Block names in the chain</label><span><input id="setFsBlock" type="range" min="10" max="28" step="1"> <output id="setFsBlockOut"></output></span>
+      <label for="setFsGroup">Group names in the chain (Amp, Delay …)</label><span><input id="setFsGroup" type="range" min="9" max="24" step="1"> <output id="setFsGroupOut"></output></span>
+      <label for="setFsHeading">Editor heading (Slot 1: Pre FX)</label><span><input id="setFsHeading" type="range" min="14" max="40" step="1"> <output id="setFsHeadingOut"></output></span>
       <label for="setFs">All other text</label><span><input id="setFs" type="range" min="12" max="22" step="1"> <output id="setFsOut"></output></span>
     </div>
     <h4>Colours</h4>
@@ -284,6 +286,8 @@ const DEFAULT_SETTINGS = {
   fontSize: 15,
   paramFontSize: 13,
   blockFontSize: 15,
+  groupFontSize: 12,
+  headingFontSize: 22,
   colours: { accent: '#ffb23e', background: '#2e3742', panels: '#38434f', text: '#edf0f2' },
   groups: { 0: '#b0894a', 1: '#c0504d', 2: '#c46a3a', 3: '#8a7a5c', 4: '#8f8f3a', 5: '#3f8fa0', 6: '#5b6fc0', 7: '#3e9a8a', 8: '#8a6fc0' },
 };
@@ -300,6 +304,8 @@ function applySettings() {
   r.setProperty('--fs', `${settings.fontSize}px`);
   r.setProperty('--fs-param', `${settings.paramFontSize}px`);
   r.setProperty('--fs-block', `${settings.blockFontSize}px`);
+  r.setProperty('--fs-group', `${settings.groupFontSize}px`);
+  r.setProperty('--fs-heading', `${settings.headingFontSize}px`);
   for (const [k, v] of Object.entries(COLOUR_VARS)) r.setProperty(v, settings.colours[k]);
 }
 const groupColour = (t) => settings.groups[t] || 'transparent';
@@ -889,7 +895,7 @@ function fail(e) {
 
 function openSettings() {
   const dlg = $('settingsDlg');
-  for (const [id, key] of [['setFs', 'fontSize'], ['setFsParam', 'paramFontSize'], ['setFsBlock', 'blockFontSize']]) {
+  for (const [id, key] of [['setFs', 'fontSize'], ['setFsParam', 'paramFontSize'], ['setFsBlock', 'blockFontSize'], ['setFsGroup', 'groupFontSize'], ['setFsHeading', 'headingFontSize']]) {
     const el = $(id), out = $(id + 'Out');
     el.value = settings[key]; out.textContent = `${settings[key]} px`;
     el.oninput = () => { settings[key] = Number(el.value); out.textContent = `${el.value} px`; applySettings(); saveSettings(); };
