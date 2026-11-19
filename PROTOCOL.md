@@ -303,3 +303,10 @@ runs its own converter `resources\nam\nam_to_gnr_cli.exe --input <file.nam> --ou
 
 Capture names are at most 18 characters. Mooer Studio names a loaded capture `<file name>_<8 random characters>` and cuts
 that to 18: "Mesa_Cln" → "Mesa_Cln_l0yr7jfz", "Mesa_Studio22_Clean" → "Mesa_Studio22_Clea" (suffix cut off entirely).
+
+### Cab IRs (capture 09)
+
+List **1** is the user cab IR list [V]. Loading works like an amp capture (`61` parts, `62` answers, `69` push), but
+in 9 parts: the name, then 8 × 512 bytes = **1024 float32 samples**. They are the first channel of the .wav, decoded
+at 44.1 kHz (resampled if needed), the first 1024 samples, zero padded; nothing else changed (no normalising)
+[V: the editor's version of the same .wav is identical byte for byte]. Deleting: `67 01 <slot u16> 01 <name>`.

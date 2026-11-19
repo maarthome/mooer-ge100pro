@@ -290,9 +290,8 @@
 <dialog id="gnrDlg">
   <form method="dialog">
     <h3 id="gnrTitle">Load a capture</h3>
-    <p class="note">Only <b>.gnr</b> files can be loaded. Convert .nam files first with
-      <code>tools\nam_to_gnr.py</code>, which runs Mooer's own converter.</p>
-    <label for="gnrFile">.gnr file</label>
+    <p class="note" id="gnrHelp"></p>
+    <label for="gnrFile" id="gnrFileLabel">.gnr file</label>
     <input type="file" id="gnrFile" accept=".gnr">
     <label for="gnrName">Name on the pedal (at most 18 characters)</label>
     <input type="text" id="gnrName" maxlength="18" spellcheck="false" autocomplete="off">
@@ -900,10 +899,34 @@ function parseGnr(buf) {
 }
 
 /** Ask for a .gnr file and a name, then load it into an empty user slot. */
+/** A cab IR as Mooer Studio sends it (capture 09): the first channel of the .wav, decoded at 44.1 kHz,
+ *  the first 1024 samples (zero padded) as float32 little endian = 4096 bytes. */
+async function parseWavIr(buf) {
+  const ctx = new OfflineAudioContext(1, 1024, 44100);   // decodeAudioData resamples to 44.1 kHz
+  let audio;
+  try { audio = await ctx.decodeAudioData(buf); } catch (e) { throw new Error('not a .wav file the browser can read'); }
+  const ch = audio.getChannelData(0), out = new Float32Array(1024);
+  out.set(ch.subarray(0, 1024));
+  return new Uint8Array(out.buffer);   // little endian on every PC this runs on
+}
+
+/** What + loads per user list: amps (2) a .gnr file, cabs (1) a .wav IR. */
+const LOADERS = {
+  2: { ext: 'gnr', what: 'capture', parse: async (f) => parseGnr(await f.arrayBuffer()),
+       help: 'Only <b>.gnr</b> files can be loaded. Convert .nam files first with <code>tools\\nam_to_gnr.py</code>, which runs Mooer\'s own converter.' },
+  1: { ext: 'wav', what: 'cab IR', parse: async (f) => parseWavIr(await f.arrayBuffer()),
+       help: 'Only <b>.wav</b> IR files can be loaded. The pedal takes the first 1024 samples of the first channel, at 44.1 kHz.' },
+};
+
 function pickGnr(list, u) {
   if (!app.dev || app.busy) return;
+  const L = LOADERS[list];
+  if (!L) return;
   const dlg = $('gnrDlg'), file = $('gnrFile'), name = $('gnrName'), info = $('gnrInfo'), load = $('gnrLoad');
-  $('gnrTitle').textContent = `Load a capture into user slot ${u}`;
+  $('gnrTitle').textContent = `Load a ${L.what} into user slot ${u}`;
+  $('gnrHelp').innerHTML = L.help;
+  $('gnrFileLabel').textContent = `.${L.ext} file`;
+  file.accept = '.' + L.ext;
   file.value = ''; name.value = ''; info.textContent = ''; load.disabled = true;
   let data = null;
   file.onchange = async () => {
@@ -911,10 +934,11 @@ function pickGnr(list, u) {
     const f = file.files[0];
     if (!f) return;
     try {
-      if (!/\.gnr$/i.test(f.name)) throw new Error('only .gnr files can be loaded');
-      data = parseGnr(await f.arrayBuffer());
-      if (!name.value) name.value = f.name.replace(/\.gnr$/i, '').slice(0, 18);
-      info.textContent = `${data.length} bytes of capture data`;
+      const ext = new RegExp(`\\.${L.ext}$`, 'i');
+      if (!ext.test(f.name)) throw new Error(`only .${L.ext} files can be loaded`);
+      data = await L.parse(f);
+      if (!name.value) name.value = f.name.replace(ext, '').slice(0, 18);
+      info.textContent = `${data.length} bytes to send`;
       load.disabled = !name.value.trim();
     } catch (e) { info.textContent = 'Can\'t use this file: ' + e.message; }
   };
@@ -1098,8 +1122,8 @@ function knobParse(k, text) {
 /** The model list: click the button, then point and click a model. User capture / IR rows carry + (load a
  *  capture into an empty slot) and − (delete it), like Mooer Studio; those and choosing a user slot wait for a
  *  Mooer Studio capture of the commands, because guessing them locked the pedal up. */
-const PM_HINT = 'Deleting drive captures and cab IRs is not possible yet: only seen for amp captures';
-const PM_ADD_HINT = 'Loading drive captures and cab IRs is not possible yet: only seen for amp captures';
+const PM_HINT = 'Deleting drive captures is not possible yet: only seen for amp captures and cab IRs';
+const PM_ADD_HINT = 'Loading drive captures is not possible yet: only seen for amp captures and cab IRs';
 const USER_HINT = 'Empty, or (drive / cab) not used on the pedal yet: choose it once on the pedal itself';
 function buildModelPicker(box, s) {
   const btn = box.querySelector('button.model'), list = box.querySelector('.mlist');
@@ -1130,13 +1154,13 @@ function buildModelPicker(box, s) {
       pm.textContent = empty ? '+' : '−';
       pm.setAttribute('aria-label', (empty ? 'Load a capture into ' : 'Delete the capture in ') + label.split(' | ')[0]);
       const u = m - info.models.length + 1;
-      const canDelete = !empty && info.user_list === 2;   // seen for amp captures only (capture 07)
+      const canDelete = !empty && (info.user_list === 2 || info.user_list === 1);   // amps: capture 07, cabs: capture 09
       if (canDelete) {
         pm.title = `Delete this capture from the pedal (user slot ${u})`;
         pm.classList.add('live');
         pm.addEventListener('click', (e) => { e.stopPropagation(); close(); deleteCapture(info.user_list, u, label.split(' | ').slice(1).join(' | ')); });
-      } else if (empty && info.user_list === 2) {
-        pm.title = `Load a .gnr capture into user slot ${u}`;
+      } else if (empty && LOADERS[info.user_list]) {
+        pm.title = `Load a .${LOADERS[info.user_list].ext} ${LOADERS[info.user_list].what} into user slot ${u}`;
         pm.classList.add('live');
         pm.removeAttribute('aria-disabled');
         pm.addEventListener('click', (e) => { e.stopPropagation(); close(); pickGnr(info.user_list, u); });
